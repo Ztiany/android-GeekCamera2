@@ -1,1 +1,3 @@
-#GeekCamera2
+# GeekCamera2
+
+GeekCamera2是基于开源程序OpenCamera二次开发而来，是一个可运行于Android平台的Camera App。
