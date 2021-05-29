@@ -104,14 +104,14 @@ import android.widget.Toast;
  *  We could probably do with decoupling this class into separate components!
  */
 public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextureListener {
-    private static final String TAG = "Preview";
+    private static final String TAG = "GeekCamera2_Preview";
 
     private final boolean using_android_l;
 
     private final ApplicationInterface applicationInterface;
-    private final CameraSurface cameraSurface;
-    private CanvasView canvasView;
-    private boolean set_preview_size;
+    private final CameraSurface mCameraSurface;
+    private CanvasView mCanvasView;
+    private boolean mSetPreviewSize;
     private int preview_w, preview_h;
     private boolean set_textureview_size;
     private int textureview_w, textureview_h;
@@ -119,7 +119,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     private RenderScript rs; // lazily created, so we don't take up resources if application isn't using renderscript
     private ScriptC_histogram_compute histogramScript; // lazily create for performance
     private boolean want_preview_bitmap; // whether application has requested we generate bitmap for the preview
-    private Bitmap preview_bitmap;
+    private Bitmap mPreviewBitmap;
     private long last_preview_bitmap_time_ms; // time the last preview_bitmap was updated
     private RefreshPreviewBitmapTask refreshPreviewBitmapTask;
 
@@ -157,7 +157,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     private boolean has_surface;
     private boolean has_aspect_ratio;
     private double aspect_ratio;
-    private final CameraControllerManager camera_controller_manager;
+    private final CameraControllerManager mCameraControllerManager;
     private CameraController mCameraController;
     enum CameraOpenState {
         CAMERAOPENSTATE_CLOSED, // have yet to attempt to open the camera (either at all, or since the camera was closed)
@@ -165,12 +165,12 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         CAMERAOPENSTATE_OPENED, // either the camera is open (if mCameraController!=null) or we failed to open the camera (if mCameraController==null)
         CAMERAOPENSTATE_CLOSING // the camera is currently being closed (on a background thread)
     }
-    private CameraOpenState camera_open_state = CameraOpenState.CAMERAOPENSTATE_CLOSED;
-    private AsyncTask<Void, Void, CameraController> open_camera_task; // background task used for opening camera
-    private CloseCameraTask close_camera_task; // background task used for closing camera
+    private CameraOpenState mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_CLOSED;
+    private AsyncTask<Void, Void, CameraController> mOpenCameraTask; // background task used for opening camera
+    private CloseCameraTask mCloseCameraTask; // background task used for closing camera
     private boolean has_permissions = true; // whether we have permissions necessary to operate the camera (camera, storage); assume true until we've been denied one of them
     private boolean is_video;
-    private volatile MediaRecorder video_recorder; // must be volatile for test project reading the state
+    private volatile MediaRecorder mMediaRecorder; // must be volatile for test project reading the state
     private volatile boolean video_start_time_set; // must be volatile for test project reading the state
     private long video_start_time; // when the video recording was started, or last resumed if it's was paused
     private long video_accumulated_time; // this time should be added to (System.currentTimeMillis() - video_start_time) to find the true video duration, that takes into account pausing/resuming, as well as any auto-restarts from max filesize
@@ -430,14 +430,14 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         }
 
         if( using_texture_view ) {
-            this.cameraSurface = new MyTextureView(getContext(), this);
+            this.mCameraSurface = new MyTextureView(getContext(), this);
             // a TextureView can't be used both as a camera preview, and used for drawing on, so we use a separate CanvasView
-            this.canvasView = new CanvasView(getContext(), this);
-            camera_controller_manager = new CameraControllerManager2(getContext());
+            this.mCanvasView = new CanvasView(getContext(), this);
+            mCameraControllerManager = new CameraControllerManager2(getContext());
         }
         else {
-            this.cameraSurface = new MySurfaceView(getContext(), this);
-            camera_controller_manager = new CameraControllerManager1();
+            this.mCameraSurface = new MySurfaceView(getContext(), this);
+            mCameraControllerManager = new CameraControllerManager1();
         }
 		/*{
 			FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
@@ -450,9 +450,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         scaleGestureDetector = new ScaleGestureDetector(getContext(), new ScaleListener());
         accessibility_manager = (AccessibilityManager)activity.getSystemService(Activity.ACCESSIBILITY_SERVICE);
 
-        parent.addView(cameraSurface.getView());
-        if( canvasView != null ) {
-            parent.addView(canvasView);
+        parent.addView(mCameraSurface.getView());
+        if( mCanvasView != null ) {
+            parent.addView(mCanvasView);
         }
     }
 
@@ -471,11 +471,11 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 	}*/
 
     private Resources getResources() {
-        return cameraSurface.getView().getResources();
+        return mCameraSurface.getView().getResources();
     }
 
     public View getView() {
-        return cameraSurface.getView();
+        return mCameraSurface.getView();
     }
 
     // If this code is changed, important to test that face detection and touch to focus still works as expected, for front and back
@@ -514,8 +514,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         }
         // Camera driver coordinates range from (-1000, -1000) to (1000, 1000).
         // UI coordinates range from (0, 0) to (width, height).
-        camera_to_preview_matrix.postScale(cameraSurface.getView().getWidth() / 2000f, cameraSurface.getView().getHeight() / 2000f);
-        camera_to_preview_matrix.postTranslate(cameraSurface.getView().getWidth() / 2f, cameraSurface.getView().getHeight() / 2f);
+        camera_to_preview_matrix.postScale(mCameraSurface.getView().getWidth() / 2000f, mCameraSurface.getView().getHeight() / 2000f);
+        camera_to_preview_matrix.postTranslate(mCameraSurface.getView().getWidth() / 2f, mCameraSurface.getView().getHeight() / 2f);
     }
 
     private void calculatePreviewToCameraMatrix() {
@@ -760,8 +760,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         int previewHeight = MeasureSpec.getSize(heightSpec);
 
         // Get the padding of the border background.
-        int hPadding = cameraSurface.getView().getPaddingLeft() + cameraSurface.getView().getPaddingRight();
-        int vPadding = cameraSurface.getView().getPaddingTop() + cameraSurface.getView().getPaddingBottom();
+        int hPadding = mCameraSurface.getView().getPaddingLeft() + mCameraSurface.getView().getPaddingRight();
+        int vPadding = mCameraSurface.getView().getPaddingTop() + mCameraSurface.getView().getPaddingBottom();
 
         // Resize the preview frame with correct aspect ratio.
         previewWidth -= hPadding;
@@ -826,7 +826,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         // The Surface has been created, acquire the camera and tell it where
         // to draw.
         mySurfaceCreated();
-        cameraSurface.getView().setWillNotDraw(false); // see http://stackoverflow.com/questions/2687015/extended-surfaceviews-ondraw-method-never-called
+        mCameraSurface.getView().setWillNotDraw(false); // see http://stackoverflow.com/questions/2687015/extended-surfaceviews-ondraw-method-never-called
     }
 
     @Override
@@ -882,7 +882,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             mCameraController.test_texture_view_buffer_w = width;
             mCameraController.test_texture_view_buffer_h = height;
 
-            if( set_preview_size && (width != preview_w || height != preview_h) ) {
+            if( mSetPreviewSize && (width != preview_w || height != preview_h) ) {
                 if( MyDebug.LOG )
                     Log.d(TAG, "updatePreviewTexture");
                 // Needed to fix problem if Open Camera is already running, and the aspect ratio changes (e.g.,
@@ -914,7 +914,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     private void configureTransform() {
         if( MyDebug.LOG )
             Log.d(TAG, "configureTransform");
-        if( mCameraController == null || !this.set_preview_size || !this.set_textureview_size ) {
+        if( mCameraController == null || !this.mSetPreviewSize || !this.set_textureview_size ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "nothing to do");
             return;
@@ -936,14 +936,14 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             matrix.postScale(scale, scale, centerX, centerY);
             matrix.postRotate(90 * (rotation - 2), centerX, centerY);
         }
-        cameraSurface.setTransform(matrix);
+        mCameraSurface.setTransform(matrix);
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public void stopVideo(boolean from_restart) {
         if( MyDebug.LOG )
             Log.d(TAG, "stopVideo()");
-        if( video_recorder == null ) {
+        if( mMediaRecorder == null ) {
             // no need to do anything if not recording
             // (important to exit, otherwise we'll momentarily switch the take photo icon to video mode in MyApplicationInterface.stoppingVideo() when opening the settings in landscape mode
             if( MyDebug.LOG )
@@ -962,19 +962,19 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( !from_restart ) {
             remaining_restart_video = 0;
         }
-        if( video_recorder != null ) { // check again, just to be safe
+        if( mMediaRecorder != null ) { // check again, just to be safe
             if( MyDebug.LOG )
                 Log.d(TAG, "stop video recording");
             //this.phase = PHASE_NORMAL;
-            video_recorder.setOnErrorListener(null);
-            video_recorder.setOnInfoListener(null);
+            mMediaRecorder.setOnErrorListener(null);
+            mMediaRecorder.setOnInfoListener(null);
 
             try {
                 if( MyDebug.LOG )
                     Log.d(TAG, "about to call video_recorder.stop()");
                 if( test_runtime_on_video_stop )
                     throw new RuntimeException();
-                video_recorder.stop();
+                mMediaRecorder.stop();
                 if( MyDebug.LOG )
                     Log.d(TAG, "done video_recorder.stop()");
             }
@@ -1002,11 +1002,11 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     private void videoRecordingStopped() {
         if( MyDebug.LOG )
             Log.d(TAG, "reset video_recorder");
-        video_recorder.reset();
+        mMediaRecorder.reset();
         if( MyDebug.LOG )
             Log.d(TAG, "release video_recorder");
-        video_recorder.release();
-        video_recorder = null;
+        mMediaRecorder.release();
+        mMediaRecorder = null;
         video_recorder_is_paused = false;
         applicationInterface.cameraInOperation(false, true);
         reconnectCamera(false); // n.b., if something went wrong with video, then we reopen the camera - which may fail (or simply not reopen, e.g., if app is now paused)
@@ -1034,7 +1034,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     private void restartVideo(boolean due_to_max_filesize) {
         if( MyDebug.LOG )
             Log.d(TAG, "restartVideo()");
-        if( video_recorder != null ) {
+        if( mMediaRecorder != null ) {
             if( due_to_max_filesize ) {
                 long last_time = System.currentTimeMillis() - video_start_time;
                 video_accumulated_time += last_time;
@@ -1119,7 +1119,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 }
                 mCameraController.release();
                 mCameraController = null;
-                camera_open_state = CameraOpenState.CAMERAOPENSTATE_CLOSED;
+                mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_CLOSED;
                 openCamera();
             }
         }
@@ -1165,8 +1165,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         protected void onPostExecute(Void result) {
             if( MyDebug.LOG )
                 Log.d(TAG, "onPostExecute, async task: " + this);
-            camera_open_state = CameraOpenState.CAMERAOPENSTATE_CLOSED;
-            close_camera_task = null; // just to be safe
+            mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_CLOSED;
+            mCloseCameraTask = null; // just to be safe
             if( closeCameraCallback != null ) {
                 if( MyDebug.LOG )
                     Log.d(TAG, "onPostExecute, calling closeCameraCallback.onClosed");
@@ -1219,7 +1219,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             if( MyDebug.LOG ) {
                 Log.d(TAG, "close mCameraController");
             }
-            if( video_recorder != null ) {
+            if( mMediaRecorder != null ) {
                 stopVideo(false);
             }
             // make sure we're into continuous video mode for closing
@@ -1240,9 +1240,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 if( async ) {
                     if( MyDebug.LOG )
                         Log.d(TAG, "close camera on background async");
-                    camera_open_state = CameraOpenState.CAMERAOPENSTATE_CLOSING;
-                    close_camera_task = new CloseCameraTask(camera_controller_local, closeCameraCallback);
-                    close_camera_task.execute();
+                    mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_CLOSING;
+                    mCloseCameraTask = new CloseCameraTask(camera_controller_local, closeCameraCallback);
+                    mCloseCameraTask.execute();
                 }
                 else {
                     if( MyDebug.LOG ) {
@@ -1253,7 +1253,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                         Log.d(TAG, "time to stop preview: " + (System.currentTimeMillis() - debug_time));
                     }
                     camera_controller_local.release();
-                    camera_open_state = CameraOpenState.CAMERAOPENSTATE_CLOSED;
+                    mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_CLOSED;
                 }
             }
         }
@@ -1356,7 +1356,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     private void openCamera() {
         long debug_time = 0;
         if( MyDebug.LOG ) {
-            Log.d(TAG, "openCamera()");
+            Log.d(TAG, "openCamera()", new Throwable());
             debug_time = System.currentTimeMillis();
         }
         if( applicationInterface.isPreviewInBackground() ) {
@@ -1366,19 +1366,19 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             // opening from mySurfaceCreated()
             return;
         }
-        else if( camera_open_state == CameraOpenState.CAMERAOPENSTATE_OPENING ) {
+        else if( mCameraOpenState == CameraOpenState.CAMERAOPENSTATE_OPENING ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "already opening camera in background thread");
             return;
         }
-        else if( camera_open_state == CameraOpenState.CAMERAOPENSTATE_CLOSING ) {
+        else if( mCameraOpenState == CameraOpenState.CAMERAOPENSTATE_CLOSING ) {
             Log.d(TAG, "tried to open camera while camera is still closing in background thread");
             return;
         }
         // need to init everything now, in case we don't open the camera (but these may already be initialised from an earlier call - e.g., if we are now switching to another camera)
         // n.b., don't reset has_set_location, as we can remember the location when switching camera
         is_preview_started = false; // theoretically should be false anyway, but I had one RuntimeException from surfaceCreated()->openCamera()->setupCamera()->setPreviewSize() because is_preview_started was true, even though the preview couldn't have been started
-        set_preview_size = false;
+        mSetPreviewSize = false;
         preview_w = 0;
         preview_h = 0;
         has_focus_area = false;
@@ -1499,9 +1499,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 			}
 		}*/
 
-        camera_open_state = CameraOpenState.CAMERAOPENSTATE_OPENING;
+        mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_OPENING;
         int cameraId = applicationInterface.getCameraIdPref();
-        if( cameraId < 0 || cameraId >= camera_controller_manager.getNumberOfCameras() ) {
+        if( cameraId < 0 || cameraId >= mCameraControllerManager.getNumberOfCameras() ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "invalid cameraId: " + cameraId);
             cameraId = 0;
@@ -1524,7 +1524,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( use_background_thread ) {
             final int cameraId_f = cameraId;
 
-            open_camera_task = new AsyncTask<Void, Void, CameraController>() {
+            mOpenCameraTask = new AsyncTask<Void, Void, CameraController>() {
                 private static final String TAG = "Preview/openCamera";
 
                 @Override
@@ -1545,8 +1545,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                     cameraOpened();
                     // set camera_open_state after cameraOpened, just in case a non-UI thread is listening for this - also
                     // important for test code waitUntilCameraOpened(), as test code runs on a different thread
-                    camera_open_state = CameraOpenState.CAMERAOPENSTATE_OPENED;
-                    open_camera_task = null; // just to be safe
+                    mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_OPENED;
+                    mOpenCameraTask = null; // just to be safe
                     if( MyDebug.LOG )
                         Log.d(TAG, "onPostExecute done, async task: " + this);
                 }
@@ -1562,8 +1562,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                         // this is the local camera_controller, not Preview.this.camera_controller!
                         camera_controller.release();
                     }
-                    camera_open_state = CameraOpenState.CAMERAOPENSTATE_OPENED; // n.b., still set OPENED state - important for test thread to know that this callback is complete
-                    open_camera_task = null; // just to be safe
+                    mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_OPENED; // n.b., still set OPENED state - important for test thread to know that this callback is complete
+                    mOpenCameraTask = null; // just to be safe
                     if( MyDebug.LOG )
                         Log.d(TAG, "onCancelled done, async task: " + this);
                 }
@@ -1576,7 +1576,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             }
 
             cameraOpened();
-            camera_open_state = CameraOpenState.CAMERAOPENSTATE_OPENED;
+            mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_OPENED;
         }
 
         if( MyDebug.LOG ) {
@@ -1612,12 +1612,12 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                         Log.e(TAG, "error from CameraController: camera device failed");
                     if( mCameraController != null ) {
                         mCameraController = null;
-                        camera_open_state = CameraOpenState.CAMERAOPENSTATE_CLOSED;
+                        mCameraOpenState = CameraOpenState.CAMERAOPENSTATE_CLOSED;
                         applicationInterface.onCameraError();
                     }
                 }
             };
-            if( using_android_l && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP ) {
+            if(using_android_l && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 // n.b., using_android_l should only be set if Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP,
                 // but Android inspection warnings aren't clever enough to figure that out, and would otherwise
                 // complain about use of CameraController2
@@ -1632,9 +1632,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 if( applicationInterface.useCamera2FakeFlash() ) {
                     camera_controller_local.setUseCamera2FakeFlash(true);
                 }
-            }
-            else
+            } else {
                 camera_controller_local = new CameraController1(cameraId, cameraErrorCallback);
+            }
             //throw new CameraControllerException(); // uncomment to test camera not opening
         }
         catch(CameraControllerException e) {
@@ -1695,7 +1695,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 
             if( MyDebug.LOG )
                 Log.d(TAG, "call setPreviewDisplay");
-            cameraSurface.setPreviewDisplay(mCameraController);
+            mCameraSurface.setPreviewDisplay(mCameraController);
             if( MyDebug.LOG ) {
                 Log.d(TAG, "openCamera: time after setting preview display: " + (System.currentTimeMillis() - debug_time));
             }
@@ -1761,19 +1761,19 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
      *  camera not yet available).
      */
     public boolean isOpeningCamera() {
-        return camera_open_state == CameraOpenState.CAMERAOPENSTATE_OPENING;
+        return mCameraOpenState == CameraOpenState.CAMERAOPENSTATE_OPENING;
     }
 
     /** Returns true iff we've tried to open the camera (whether or not it was successful).
      */
     public boolean openCameraAttempted() {
-        return camera_open_state == CameraOpenState.CAMERAOPENSTATE_OPENED;
+        return mCameraOpenState == CameraOpenState.CAMERAOPENSTATE_OPENED;
     }
 
     /** Returns true iff we've tried to open the camera, and were unable to do so.
      */
     public boolean openCameraFailed() {
-        return camera_open_state == CameraOpenState.CAMERAOPENSTATE_OPENED && mCameraController == null;
+        return mCameraOpenState == CameraOpenState.CAMERAOPENSTATE_OPENED && mCameraController == null;
     }
 
     /* Should only be called after camera first opened, or after preview is paused.
@@ -2237,8 +2237,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                                 for(CameraController.Face face : local_faces) {
                                     float face_x = face.rect.centerX();
                                     float face_y = face.rect.centerY();
-                                    face_x /= (float)cameraSurface.getView().getWidth();
-                                    face_y /= (float)cameraSurface.getView().getHeight();
+                                    face_x /= (float) mCameraSurface.getView().getWidth();
+                                    face_y /= (float) mCameraSurface.getView().getHeight();
                                     if( all_centre ) {
                                         if( face_x < bdry_frac_c || face_x > 1.0f-bdry_frac_c || face_y < bdry_frac_c || face_y > 1.0f-bdry_frac_c )
                                             all_centre = false;
@@ -3021,7 +3021,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( supported_preview_sizes != null && supported_preview_sizes.size() > 0 ) {
             CameraController.Size best_size = getOptimalPreviewSize(supported_preview_sizes);
             mCameraController.setPreviewSize(best_size.width, best_size.height);
-            this.set_preview_size = true;
+            this.mSetPreviewSize = true;
             this.preview_w = best_size.width;
             this.preview_h = best_size.height;
             this.setAspectRatio( ((double)best_size.width) / (double)best_size.height );
@@ -3681,9 +3681,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             aspect_ratio = ratio;
             if( MyDebug.LOG )
                 Log.d(TAG, "new aspect ratio: " + aspect_ratio);
-            cameraSurface.getView().requestLayout();
-            if( canvasView != null ) {
-                canvasView.requestLayout();
+            mCameraSurface.getView().requestLayout();
+            if( mCanvasView != null ) {
+                mCanvasView.requestLayout();
             }
         }
     }
@@ -4161,7 +4161,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 Log.d(TAG, "currently taking a photo");
             return false;
         }
-        int n_cameras = camera_controller_manager.getNumberOfCameras();
+        int n_cameras = mCameraControllerManager.getNumberOfCameras();
         if( MyDebug.LOG )
             Log.d(TAG, "found " + n_cameras + " cameras");
         if( n_cameras == 0 )
@@ -4172,12 +4172,12 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     public void setCamera(int cameraId) {
         if( MyDebug.LOG )
             Log.d(TAG, "setCamera(): " + cameraId);
-        if( cameraId < 0 || cameraId >= camera_controller_manager.getNumberOfCameras() ) {
+        if( cameraId < 0 || cameraId >= mCameraControllerManager.getNumberOfCameras() ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "invalid cameraId: " + cameraId);
             cameraId = 0;
         }
-        if( camera_open_state == CameraOpenState.CAMERAOPENSTATE_OPENING ) {
+        if( mCameraOpenState == CameraOpenState.CAMERAOPENSTATE_OPENING ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "already opening camera in background thread");
             return;
@@ -4394,7 +4394,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         }
         boolean old_is_video = is_video;
         if( this.is_video ) {
-            if( video_recorder != null ) {
+            if( mMediaRecorder != null ) {
                 stopVideo(false);
             }
             this.is_video = false;
@@ -5118,7 +5118,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_APPROACHING && video_restart_on_max_filesize ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "seamless restart due to max filesize approaching - try setNextOutputFile");
-            if( video_recorder == null ) {
+            if( mMediaRecorder == null ) {
                 // just in case?
                 if( MyDebug.LOG )
                     Log.d(TAG, "video_recorder is null!");
@@ -5166,10 +5166,10 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                             //if( true )
                             //	throw new IOException(); // test
                             if( info.video_method == ApplicationInterface.VideoMethod.FILE ) {
-                                video_recorder.setNextOutputFile(new File(info.video_filename));
+                                mMediaRecorder.setNextOutputFile(new File(info.video_filename));
                             }
                             else {
-                                video_recorder.setNextOutputFile(info.video_pfd_saf.getFileDescriptor());
+                                mMediaRecorder.setNextOutputFile(info.video_pfd_saf.getFileDescriptor());
                             }
                             if( MyDebug.LOG )
                                 Log.d(TAG, "setNextOutputFile succeeded");
@@ -5518,7 +5518,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 applicationInterface.startingVideo();
         		/*if( true ) // test
         			throw new IOException();*/
-                cameraSurface.setVideoRecorder(local_video_recorder);
+                mCameraSurface.setVideoRecorder(local_video_recorder);
 
                 local_video_recorder.setOrientationHint(getImageVideoRotation());
                 if( MyDebug.LOG )
@@ -5550,14 +5550,14 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                             Log.d(TAG, "test_video_failure is true");
                         throw new RuntimeException();
                     }
-                    this.video_recorder = local_video_recorder;
+                    this.mMediaRecorder = local_video_recorder;
                     videoRecordingStarted(max_filesize_restart);
                 }
                 catch(RuntimeException e) {
                     // needed for emulator at least - although MediaRecorder not meant to work with emulator, it's good to fail gracefully
                     Log.e(TAG, "runtime exception starting video recorder");
                     e.printStackTrace();
-                    this.video_recorder = local_video_recorder; // still assign, so failedToStartVideoRecorder() will release the video_recorder
+                    this.mMediaRecorder = local_video_recorder; // still assign, so failedToStartVideoRecorder() will release the video_recorder
                     // told_app_starting must be true if we're here
                     applicationInterface.stoppingVideo();
                     failedToStartVideoRecorder(profile);
@@ -5606,14 +5606,14 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 if( MyDebug.LOG )
                     Log.e(TAG, "failed to save video");
                 e.printStackTrace();
-                this.video_recorder = local_video_recorder;
+                this.mMediaRecorder = local_video_recorder;
                 if( told_app_starting ) {
                     applicationInterface.stoppingVideo();
                 }
                 applicationInterface.onFailedCreateVideoFileError();
-                video_recorder.reset();
-                video_recorder.release();
-                video_recorder = null;
+                mMediaRecorder.reset();
+                mMediaRecorder.release();
+                mMediaRecorder = null;
                 video_recorder_is_paused = false;
                 applicationInterface.deleteUnusedVideo(videoFileInfo.video_method, videoFileInfo.video_uri, videoFileInfo.video_filename);
                 videoFileInfo = new VideoFileInfo();
@@ -5624,7 +5624,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 if( MyDebug.LOG )
                     Log.e(TAG, "camera exception starting video recorder");
                 e.printStackTrace();
-                this.video_recorder = local_video_recorder; // still assign, so failedToStartVideoRecorder() will release the video_recorder
+                this.mMediaRecorder = local_video_recorder; // still assign, so failedToStartVideoRecorder() will release the video_recorder
                 if( told_app_starting ) {
                     applicationInterface.stoppingVideo();
                 }
@@ -5634,13 +5634,13 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 if( MyDebug.LOG )
                     Log.e(TAG, "nofreestorageexception starting video recorder");
                 e.printStackTrace();
-                this.video_recorder = local_video_recorder;
+                this.mMediaRecorder = local_video_recorder;
                 if( told_app_starting ) {
                     applicationInterface.stoppingVideo();
                 }
-                video_recorder.reset();
-                video_recorder.release();
-                video_recorder = null;
+                mMediaRecorder.reset();
+                mMediaRecorder.release();
+                mMediaRecorder = null;
                 video_recorder_is_paused = false;
                 applicationInterface.deleteUnusedVideo(videoFileInfo.video_method, videoFileInfo.video_uri, videoFileInfo.video_filename);
                 videoFileInfo = new VideoFileInfo();
@@ -5756,9 +5756,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 
     private void failedToStartVideoRecorder(VideoProfile profile) {
         applicationInterface.onVideoRecordStartError(profile);
-        video_recorder.reset();
-        video_recorder.release();
-        video_recorder = null;
+        mMediaRecorder.reset();
+        mMediaRecorder.release();
+        mMediaRecorder = null;
         video_recorder_is_paused = false;
         applicationInterface.deleteUnusedVideo(videoFileInfo.video_method, videoFileInfo.video_uri, videoFileInfo.video_filename);
         videoFileInfo = new VideoFileInfo();
@@ -5779,7 +5779,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             if( video_recorder_is_paused ) {
                 if( MyDebug.LOG )
                     Log.d(TAG, "resuming...");
-                video_recorder.resume();
+                mMediaRecorder.resume();
                 video_recorder_is_paused = false;
                 video_start_time = System.currentTimeMillis();
                 this.showToast(pause_video_toast, R.string.video_resume);
@@ -5787,7 +5787,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             else {
                 if( MyDebug.LOG )
                     Log.d(TAG, "pausing...");
-                video_recorder.pause();
+                mMediaRecorder.pause();
                 video_recorder_is_paused = true;
                 long last_time = System.currentTimeMillis() - video_start_time;
                 video_accumulated_time += last_time;
@@ -7243,17 +7243,17 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         recreatePreviewBitmap();
         this.app_is_paused = false;
         this.is_paused = false;
-        cameraSurface.onResume();
-        if( canvasView != null )
-            canvasView.onResume();
+        mCameraSurface.onResume();
+        if( mCanvasView != null )
+            mCanvasView.onResume();
 
-        if( camera_open_state == CameraOpenState.CAMERAOPENSTATE_CLOSING ) {
+        if( mCameraOpenState == CameraOpenState.CAMERAOPENSTATE_CLOSING ) {
             // when pausing, we close the camera on a background thread - so if this is still happening when we resume,
             // we won't be able to open the camera, so need to open camera when it's closed
             if( MyDebug.LOG )
                 Log.d(TAG, "camera still closing");
-            if( close_camera_task != null ) { // just to be safe
-                close_camera_task.reopen = true;
+            if( mCloseCameraTask != null ) { // just to be safe
+                mCloseCameraTask.reopen = true;
             }
             else {
                 Log.e(TAG, "onResume: state is CAMERAOPENSTATE_CLOSING, but close_camera_task is null");
@@ -7281,11 +7281,11 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         this.is_paused = true;
         if( activity_is_pausing )
             this.app_is_paused = true; // note, if activity_is_paused==false, we don't change app_is_paused, in case app was paused indicated via a separate call to onPause
-        if( camera_open_state == CameraOpenState.CAMERAOPENSTATE_OPENING ) {
+        if( mCameraOpenState == CameraOpenState.CAMERAOPENSTATE_OPENING ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "cancel open_camera_task");
-            if( open_camera_task != null ) { // just to be safe
-                this.open_camera_task.cancel(true);
+            if( mOpenCameraTask != null ) { // just to be safe
+                this.mOpenCameraTask.cancel(true);
             }
             else {
                 Log.e(TAG, "onPause: state is CAMERAOPENSTATE_OPENING, but open_camera_task is null");
@@ -7294,9 +7294,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         //final boolean use_background_thread = false;
         final boolean use_background_thread = true;
         this.closeCamera(use_background_thread, null);
-        cameraSurface.onPause();
-        if( canvasView != null )
-            canvasView.onPause();
+        mCameraSurface.onPause();
+        if( mCanvasView != null )
+            mCanvasView.onPause();
         freePreviewBitmap();
     }
 
@@ -7326,15 +7326,15 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             rs = null;
         }
 
-        if( camera_open_state == CameraOpenState.CAMERAOPENSTATE_CLOSING ) {
+        if( mCameraOpenState == CameraOpenState.CAMERAOPENSTATE_CLOSING ) {
             // If the camera is currently closing on a background thread, then wait until the camera has closed to be safe
             if( MyDebug.LOG ) {
                 Log.d(TAG, "wait for close_camera_task");
             }
-            if( close_camera_task != null ) { // just to be safe
+            if( mCloseCameraTask != null ) { // just to be safe
                 long time_s = System.currentTimeMillis();
                 try {
-                    close_camera_task.get(3000, TimeUnit.MILLISECONDS); // set timeout to avoid ANR (camera resource should be freed by the OS when destroyed anyway)
+                    mCloseCameraTask.get(3000, TimeUnit.MILLISECONDS); // set timeout to avoid ANR (camera resource should be freed by the OS when destroyed anyway)
                 }
                 catch(ExecutionException | InterruptedException | TimeoutException e) {
                     Log.e(TAG, "exception while waiting for close_camera_task to finish");
@@ -7703,7 +7703,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     public void enablePreviewBitmap() {
         if( MyDebug.LOG )
             Log.d(TAG, "enablePreviewBitmap");
-        if( cameraSurface instanceof TextureView ) {
+        if( mCameraSurface instanceof TextureView ) {
             want_preview_bitmap = true;
             recreatePreviewBitmap();
         }
@@ -7767,11 +7767,11 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             Log.d(TAG, "freePreviewBitmap");
         cancelRefreshPreviewBitmap();
         histogram = null;
-        if( preview_bitmap != null ) {
-            recycleBitmapForPreviewTask(preview_bitmap);
+        if( mPreviewBitmap != null ) {
+            recycleBitmapForPreviewTask(mPreviewBitmap);
             // It's okay to set preview_bitmap to null even if refreshPreviewBitmapTask is currently running in the background
             // as it takes it's own reference. But we shouldn't recycle until the background thread is complete.
-            preview_bitmap = null;
+            mPreviewBitmap = null;
         }
         freeZebraStripesBitmap();
         freeFocusPeakingBitmap();
@@ -7801,7 +7801,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             try {
 				/*if( true )
 					throw new IllegalArgumentException(); // test*/
-                preview_bitmap = Bitmap.createBitmap(bitmap_width, bitmap_height, Bitmap.Config.ARGB_8888);
+                mPreviewBitmap = Bitmap.createBitmap(bitmap_width, bitmap_height, Bitmap.Config.ARGB_8888);
             }
             catch(IllegalArgumentException e) {
                 Log.e(TAG, "failed to create preview_bitmap");
@@ -7831,11 +7831,11 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( MyDebug.LOG )
             Log.d(TAG, "createZebraStripesBitmap");
         // n.b., preview_bitmap might be null if we failed to create the bitmap
-        if( want_zebra_stripes && preview_bitmap != null ) {
+        if( want_zebra_stripes && mPreviewBitmap != null ) {
             try {
 				/*if( true )
 					throw new IllegalArgumentException(); // test*/
-                zebra_stripes_bitmap_buffer = Bitmap.createBitmap(preview_bitmap.getWidth(), preview_bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                zebra_stripes_bitmap_buffer = Bitmap.createBitmap(mPreviewBitmap.getWidth(), mPreviewBitmap.getHeight(), Bitmap.Config.ARGB_8888);
                 // zebra_stripes_bitmap itself is created dynamically when generating the zebra stripes
             }
             catch(IllegalArgumentException e) {
@@ -7862,11 +7862,11 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( MyDebug.LOG )
             Log.d(TAG, "createFocusPeakingBitmap");
         // n.b., preview_bitmap might be null if we failed to create the bitmap
-        if( want_focus_peaking & preview_bitmap != null ) {
+        if( want_focus_peaking & mPreviewBitmap != null ) {
             try {
 				/*if( true )
 					throw new IllegalArgumentException(); // test*/
-                focus_peaking_bitmap_buffer = Bitmap.createBitmap(preview_bitmap.getWidth(), preview_bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                focus_peaking_bitmap_buffer = Bitmap.createBitmap(mPreviewBitmap.getWidth(), mPreviewBitmap.getHeight(), Bitmap.Config.ARGB_8888);
                 // focus_peaking_bitmap itself is created dynamically when generating
             }
             catch(IllegalArgumentException e) {
@@ -7947,7 +7947,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 
         RefreshPreviewBitmapTask(Preview preview, boolean update_histogram) {
             this.previewReference = new WeakReference<>(preview);
-            this.preview_bitmapReference = new WeakReference<>(preview.preview_bitmap);
+            this.preview_bitmapReference = new WeakReference<>(preview.mPreviewBitmap);
             this.zebra_stripes_bitmap_bufferReference = new WeakReference<>(preview.zebra_stripes_bitmap_buffer);
             this.focus_peaking_bitmap_bufferReference = new WeakReference<>(preview.focus_peaking_bitmap_buffer);
             this.update_histogram = update_histogram;
@@ -8105,7 +8105,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             try {
                 if( MyDebug.LOG )
                     Log.d(TAG, "time before getBitmap: " + (System.currentTimeMillis() - debug_time));
-                TextureView textureView = (TextureView)preview.cameraSurface;
+                TextureView textureView = (TextureView)preview.mCameraSurface;
                 textureView.getBitmap(preview_bitmap);
                 if( MyDebug.LOG )
                     Log.d(TAG, "time after getBitmap: " + (System.currentTimeMillis() - debug_time));
@@ -8302,7 +8302,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         final int refresh_histogram_rate_ms = 200;
         final long refresh_time = (want_zebra_stripes || want_focus_peaking) ? 40 : refresh_histogram_rate_ms;
         long time_now = System.currentTimeMillis();
-        if( want_preview_bitmap && preview_bitmap != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
+        if( want_preview_bitmap && mPreviewBitmap != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
                 !is_paused && !applicationInterface.isPreviewInBackground() &&
                 !refreshPreviewBitmapTaskIsRunning() && time_now > last_preview_bitmap_time_ms + refresh_time ) {
             if( MyDebug.LOG )
@@ -8342,7 +8342,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     }
 
     public boolean isVideoRecording() {
-        return video_recorder != null && video_start_time_set;
+        return mMediaRecorder != null && video_start_time_set;
     }
 
     public boolean isVideoRecordingPaused() {
@@ -8362,7 +8362,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     }
 
     public int getMaxAmplitude() {
-        return video_recorder != null ? video_recorder.getMaxAmplitude() : 0;
+        return mMediaRecorder != null ? mMediaRecorder.getMaxAmplitude() : 0;
     }
 
     /** Returns the frame rate that the preview's surface or canvas view should be updated.
@@ -8398,7 +8398,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     }
 
     public CameraControllerManager getCameraControllerManager() {
-        return this.camera_controller_manager;
+        return this.mCameraControllerManager;
     }
 
     public boolean supportsFocus() {

@@ -18,21 +18,24 @@ import android.util.SizeF;
  */
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class CameraControllerManager2 extends CameraControllerManager {
-    private static final String TAG = "CControllerManager2";
+    private static final String TAG = "GeekCamera2_CCM2";
 
-    private final Context context;
+    private final Context mContext;
 
     public CameraControllerManager2(Context context) {
-        this.context = context;
+        this.mContext = context;
     }
 
     @Override
     public int getNumberOfCameras() {
-        CameraManager manager = (CameraManager)context.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
-            return manager.getCameraIdList().length;
-        }
-        catch(Throwable e) {
+            String[] cameraIdArray = manager.getCameraIdList();
+            if(MyDebug.LOG) {
+                Log.e(TAG, "getCameraIdList length:" + cameraIdArray.length);
+            }
+            return cameraIdArray.length;
+        } catch(Throwable e) {
             // in theory we should only get CameraAccessException, but Google Play shows we can get a variety of exceptions
             // from some devices, e.g., AssertionError, IllegalArgumentException, RuntimeException, so just catch everything!
             // We don't want users to experience a crash just because of buggy camera2 drivers - instead the user can switch
@@ -46,11 +49,11 @@ public class CameraControllerManager2 extends CameraControllerManager {
 
     @Override
     public CameraController.Facing getFacing(int cameraId) {
-        CameraManager manager = (CameraManager)context.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
             String cameraIdS = manager.getCameraIdList()[cameraId];
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraIdS);
-            switch( characteristics.get(CameraCharacteristics.LENS_FACING) ) {
+            switch(characteristics.get(CameraCharacteristics.LENS_FACING)) {
                 case CameraMetadata.LENS_FACING_FRONT:
                     return CameraController.Facing.FACING_FRONT;
                 case CameraMetadata.LENS_FACING_BACK:
@@ -59,13 +62,12 @@ public class CameraControllerManager2 extends CameraControllerManager {
                     return CameraController.Facing.FACING_EXTERNAL;
             }
             Log.e(TAG, "unknown camera_facing: " + characteristics.get(CameraCharacteristics.LENS_FACING));
-        }
-        catch(Throwable e) {
+        } catch(Throwable e) {
             // in theory we should only get CameraAccessException, but Google Play shows we can get a variety of exceptions
             // from some devices, e.g., AssertionError, IllegalArgumentException, RuntimeException, so just catch everything!
             // We don't want users to experience a crash just because of buggy camera2 drivers - instead the user can switch
             // back to old camera API.
-            if( MyDebug.LOG )
+            if(MyDebug.LOG)
                 Log.e(TAG, "exception trying to get camera characteristics");
             e.printStackTrace();
         }
@@ -230,7 +232,7 @@ public class CameraControllerManager2 extends CameraControllerManager {
      * This returns whether the specified camera has at least LIMITED support.
      */
     public boolean allowCamera2Support(int cameraId) {
-        CameraManager manager = (CameraManager)context.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
             String cameraIdS = manager.getCameraIdList()[cameraId];
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraIdS);

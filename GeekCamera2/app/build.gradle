@@ -3,7 +3,7 @@ apply plugin: 'com.android.application'
 android {
     compileSdkVersion 29
     compileOptions.encoding = 'UTF-8'
-
+    buildToolsVersion '30.0.3'
     defaultConfig {
         applicationId "com.deepinout.geekcamera"
         minSdkVersion 15

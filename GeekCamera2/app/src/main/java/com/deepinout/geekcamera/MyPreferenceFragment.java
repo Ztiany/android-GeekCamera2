@@ -67,7 +67,7 @@ import java.util.Scanner;
  *  Also see https://stackoverflow.com/questions/14093438/after-the-rotate-oncreate-fragment-is-called-before-oncreate-fragmentactivi .
  */
 public class MyPreferenceFragment extends PreferenceFragment implements OnSharedPreferenceChangeListener {
-    private static final String TAG = "MyPreferenceFragment";
+    private static final String TAG = "GeekCamera2_MyPreferenceFragment";
 
     private int cameraId;
 

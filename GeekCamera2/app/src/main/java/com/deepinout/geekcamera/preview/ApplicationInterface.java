@@ -65,7 +65,7 @@ public interface ApplicationInterface {
     int getExposureCompensationPref(); // 0 for default
 
     class CameraResolutionConstraints {
-        private static final String TAG = "CameraResConstraints";
+        private static final String TAG = "GeekCamera2_CameraResConstraints";
 
         public boolean has_max_mp;
         public int max_mp;

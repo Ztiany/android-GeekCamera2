@@ -22,7 +22,7 @@ import android.view.TextureView;
  *  android.hardware.Camera.
  */
 public class CameraController1 extends CameraController {
-    private static final String TAG = "CameraController1";
+    private static final String TAG = "GeekCamera2_CameraController1";
 
     private Camera camera;
     private int display_orientation;

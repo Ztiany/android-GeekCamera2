@@ -28,7 +28,7 @@ import androidx.annotation.NonNull;
  *  camera.
  */
 public abstract class CameraController {
-    private static final String TAG = "CameraController";
+    private static final String TAG = "GeekCamera2_CameraController";
     private final int cameraId;
 
     public static final String SCENE_MODE_DEFAULT = "auto"; // chosen to match Camera.Parameters.SCENE_MODE_AUTO, but we also use compatible values for Camera2 API
