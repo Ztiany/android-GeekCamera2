@@ -59,7 +59,7 @@ import android.view.TextureView;
  */
 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
 public class CameraController2 extends CameraController {
-    private static final String TAG = "GeekCamera2_CC2";
+    private static final String TAG = "GC2_CC2";
 
     private final Context context;
     private CameraDevice camera;

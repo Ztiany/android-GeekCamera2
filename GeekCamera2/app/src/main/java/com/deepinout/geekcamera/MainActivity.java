@@ -96,7 +96,7 @@ import android.widget.ZoomControls;
 /** The main Activity for Open Camera.
  */
 public class MainActivity extends Activity {
-    private static final String TAG = "GeekCamera2_MainActivity";
+    private static final String TAG = "GC2_MainActivity";
 
     private static int activity_count = 0;
 

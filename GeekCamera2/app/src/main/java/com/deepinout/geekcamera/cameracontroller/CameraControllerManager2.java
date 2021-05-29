@@ -18,7 +18,7 @@ import android.util.SizeF;
  */
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class CameraControllerManager2 extends CameraControllerManager {
-    private static final String TAG = "GeekCamera2_CCM2";
+    private static final String TAG = "GC2_CCM2";
 
     private final Context mContext;
 

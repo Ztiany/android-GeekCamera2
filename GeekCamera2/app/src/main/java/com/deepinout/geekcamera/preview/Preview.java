@@ -104,7 +104,7 @@ import android.widget.Toast;
  *  We could probably do with decoupling this class into separate components!
  */
 public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextureListener {
-    private static final String TAG = "GeekCamera2_Preview";
+    private static final String TAG = "GC2_Preview";
 
     private final boolean using_android_l;
 

@@ -10,7 +10,7 @@ import android.util.Log;
  *  android.hardware.Camera.
  */
 public class CameraControllerManager1 extends CameraControllerManager {
-    private static final String TAG = "GeekCamera2_CCM1";
+    private static final String TAG = "GC2_CCM1";
     public int getNumberOfCameras() {
         return Camera.getNumberOfCameras();
     }
