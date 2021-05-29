@@ -13,6 +13,11 @@ import android.os.Build;
 import android.util.Log;
 import android.util.SizeF;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+
 /** Provides support using Android 5's Camera 2 API
  *  android.hardware.camera2.*.
  */
@@ -21,27 +26,31 @@ public class CameraControllerManager2 extends CameraControllerManager {
     private static final String TAG = "GC2_CCM2";
 
     private final Context mContext;
+    CameraManager mCameraManager;
 
     public CameraControllerManager2(Context context) {
         this.mContext = context;
+        mCameraManager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
     }
 
     @Override
     public int getNumberOfCameras() {
-        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
-            String[] cameraIdArray = manager.getCameraIdList();
+            String[] cameraIdArray = mCameraManager.getCameraIdList();
             if(MyDebug.LOG) {
-                Log.e(TAG, "getCameraIdList length:" + cameraIdArray.length);
+                Log.d(TAG, "getCameraIdList length:" + cameraIdArray.length);
+            }
+            for (int i = 0; i < cameraIdArray.length; i++) {
+                isLogicalMultiCamera(mContext, i);
+                if(MyDebug.LOG) {
+                    Log.d(TAG, "CameraID:" +i + ", Facing:" + getFacing(i));
+                }
             }
             return cameraIdArray.length;
         } catch(Throwable e) {
-            // in theory we should only get CameraAccessException, but Google Play shows we can get a variety of exceptions
-            // from some devices, e.g., AssertionError, IllegalArgumentException, RuntimeException, so just catch everything!
-            // We don't want users to experience a crash just because of buggy camera2 drivers - instead the user can switch
-            // back to old camera API.
-            if( MyDebug.LOG )
+            if(MyDebug.LOG) {
                 Log.e(TAG, "exception trying to get camera ids");
+            }
             e.printStackTrace();
         }
         return 0;
@@ -49,10 +58,9 @@ public class CameraControllerManager2 extends CameraControllerManager {
 
     @Override
     public CameraController.Facing getFacing(int cameraId) {
-        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
-            String cameraIdS = manager.getCameraIdList()[cameraId];
-            CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraIdS);
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
             switch(characteristics.get(CameraCharacteristics.LENS_FACING)) {
                 case CameraMetadata.LENS_FACING_FRONT:
                     return CameraController.Facing.FACING_FRONT;
@@ -63,10 +71,6 @@ public class CameraControllerManager2 extends CameraControllerManager {
             }
             Log.e(TAG, "unknown camera_facing: " + characteristics.get(CameraCharacteristics.LENS_FACING));
         } catch(Throwable e) {
-            // in theory we should only get CameraAccessException, but Google Play shows we can get a variety of exceptions
-            // from some devices, e.g., AssertionError, IllegalArgumentException, RuntimeException, so just catch everything!
-            // We don't want users to experience a crash just because of buggy camera2 drivers - instead the user can switch
-            // back to old camera API.
             if(MyDebug.LOG)
                 Log.e(TAG, "exception trying to get camera characteristics");
             e.printStackTrace();
@@ -76,11 +80,10 @@ public class CameraControllerManager2 extends CameraControllerManager {
 
     @Override
     public String getDescription(Context context, int cameraId) {
-        CameraManager manager = (CameraManager)context.getSystemService(Context.CAMERA_SERVICE);
         String description = null;
         try {
-            String cameraIdS = manager.getCameraIdList()[cameraId];
-            CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraIdS);
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
 
             switch( characteristics.get(CameraCharacteristics.LENS_FACING) ) {
                 case CameraMetadata.LENS_FACING_FRONT:
@@ -114,10 +117,9 @@ public class CameraControllerManager2 extends CameraControllerManager {
 
     @Override
     public String getHardwareLevel(Context context, int cameraId) {
-        CameraManager manager = (CameraManager)context.getSystemService(Context.CAMERA_SERVICE);
         try {
-            String cameraIdS = manager.getCameraIdList()[cameraId];
-            CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraIdS);
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
             int hardware_level = characteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
             switch (hardware_level) {
                 case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY:
@@ -145,6 +147,31 @@ public class CameraControllerManager2 extends CameraControllerManager {
             e.printStackTrace();
         }
         return "ERROR";
+    }
+
+    @Override
+    public boolean isLogicalMultiCamera(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            Set<String> phySicalCameraIds = characteristics.getPhysicalCameraIds();
+            int[] capabilities = characteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES);
+            List<Integer> capabilitiesList = new ArrayList<>();
+            for(Integer capability : capabilities) {
+                capabilitiesList.add(capability);
+            }
+            int logicalMultiCameraId = CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA;
+            Log.d(TAG, "(LogicalCamera: " + cameraIdS +
+                    ",PhysicalCameraIds:" + phySicalCameraIds.toString() +
+                    ",has LOGICAL_MULTI_CAMERA capability:" +
+                    capabilitiesList.contains(logicalMultiCameraId) + ")");
+            return capabilitiesList.contains(logicalMultiCameraId) && (capabilities.length > 0);
+        } catch (Throwable e) {
+            if(MyDebug.LOG)
+                Log.e(TAG, "exception trying to isLogicalMultiCamera.");
+            e.printStackTrace();
+        }
+        return false;
     }
 
     /** Helper class to compute view angles from the CameraCharacteristics.
@@ -232,10 +259,9 @@ public class CameraControllerManager2 extends CameraControllerManager {
      * This returns whether the specified camera has at least LIMITED support.
      */
     public boolean allowCamera2Support(int cameraId) {
-        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
-            String cameraIdS = manager.getCameraIdList()[cameraId];
-            CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraIdS);
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
             //return isHardwareLevelSupported(characteristics, CameraMetadata.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY);
             return isHardwareLevelSupported(characteristics, CameraMetadata.INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED);
         }

@@ -17,4 +17,6 @@ public abstract class CameraControllerManager {
     public abstract String getDescription(Context context, int cameraId);
 
     public abstract String getHardwareLevel(Context context, int cameraId);
+
+    public abstract boolean isLogicalMultiCamera(Context context, int cameraId);
 }

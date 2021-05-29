@@ -62,7 +62,7 @@ public class CameraController2 extends CameraController {
     private static final String TAG = "GC2_CC2";
 
     private final Context context;
-    private CameraDevice camera;
+    private CameraDevice mCameraDevice;
     private final String cameraIdS;
 
     private final boolean is_samsung;
@@ -1379,7 +1379,7 @@ public class CameraController2 extends CameraController {
                     }
                     if( burst_type != BurstType.BURSTTYPE_FOCUS ) {
                         try {
-                            if( camera != null && captureSession != null ) { // make sure camera wasn't released in the meantime
+                            if( mCameraDevice != null && captureSession != null ) { // make sure camera wasn't released in the meantime
                                 captureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, handler);
                             }
                         }
@@ -1462,7 +1462,7 @@ public class CameraController2 extends CameraController {
                             public void run(){
                                 if( MyDebug.LOG )
                                     Log.i(TAG, "take picture after delay for next focus bracket");
-                                if( camera != null && captureSession != null ) { // make sure camera wasn't released in the meantime
+                                if( mCameraDevice != null && captureSession != null ) { // make sure camera wasn't released in the meantime
                                     if( picture_cb.imageQueueWouldBlock(imageReaderRaw != null ? 1 : 0, 1) ) {
                                         if( MyDebug.LOG ) {
                                             Log.i(TAG, "...but wait for next focus bracket, as image queue would block");
@@ -1713,16 +1713,16 @@ public class CameraController2 extends CameraController {
     @Override
     public void onError() {
         Log.e(TAG, "onError");
-        if( camera != null ) {
-            onError(camera);
+        if( mCameraDevice != null ) {
+            onError(mCameraDevice);
         }
     }
 
     private void onError(@NonNull CameraDevice cam) {
         Log.e(TAG, "onError");
-        boolean camera_already_opened = this.camera != null;
+        boolean camera_already_opened = this.mCameraDevice != null;
         // need to set the camera to null first, as closing the camera may take some time, and we don't want any other operations to continue (if called from main thread)
-        this.camera = null;
+        this.mCameraDevice = null;
         if( MyDebug.LOG )
             Log.i(TAG, "onError: camera is now set to null");
         cam.close();
@@ -1811,7 +1811,7 @@ public class CameraController2 extends CameraController {
                             Log.i(TAG, "characteristics_facing: " + characteristics_facing);
                         }
 
-                        CameraController2.this.camera = cam;
+                        CameraController2.this.mCameraDevice = cam;
 
                         // note, this won't start the preview yet, but we create the previewBuilder in order to start setting camera parameters
                         createPreviewRequest();
@@ -1857,7 +1857,7 @@ public class CameraController2 extends CameraController {
                     first_callback = false;
                     // must call close() if disconnected before camera was opened
                     // need to set the camera to null first, as closing the camera may take some time, and we don't want any other operations to continue (if called from main thread)
-                    CameraController2.this.camera = null;
+                    CameraController2.this.mCameraDevice = null;
                     if( MyDebug.LOG )
                         Log.i(TAG, "onDisconnected: camera is now set to null");
                     cam.close();
@@ -1882,7 +1882,7 @@ public class CameraController2 extends CameraController {
                 Log.e(TAG, "camera error: " + error);
                 if( MyDebug.LOG ) {
                     Log.i(TAG, "received camera: " + cam);
-                    Log.i(TAG, "actual camera: " + CameraController2.this.camera);
+                    Log.i(TAG, "actual camera: " + CameraController2.this.mCameraDevice);
                     Log.i(TAG, "first_callback? " + first_callback);
                 }
                 if( first_callback ) {
@@ -2001,13 +2001,13 @@ public class CameraController2 extends CameraController {
                 }
             }
         }
-        if( camera == null ) {
+        if( mCameraDevice == null ) {
             // n.b., as this is potentially serious error, we always log even if MyDebug.LOG is false
             Log.e(TAG, "camera failed to open");
             throw new CameraControllerException();
         }
         if( MyDebug.LOG )
-            Log.i(TAG, "camera now opened: " + camera);
+            Log.i(TAG, "camera now opened: " + mCameraDevice);
 
         /*{
             // test error handling
@@ -2040,20 +2040,20 @@ public class CameraController2 extends CameraController {
 
     @Override
     public void release() {
-        if( MyDebug.LOG )
-            Log.i(TAG, "release: " + this);
+        if(MyDebug.LOG)
+            Log.i(TAG, "release, id:" + getCameraId(), new Throwable());
         synchronized( background_camera_lock ) {
             if( captureSession != null ) {
-                captureSession.close();
+//                captureSession.close();
                 captureSession = null;
                 //pending_request_when_ready = null;
             }
         }
         previewBuilder = null;
         previewIsVideoMode = false;
-        if( camera != null ) {
-            camera.close();
-            camera = null;
+        if( mCameraDevice != null ) {
+            mCameraDevice.close();
+            mCameraDevice = null;
         }
         closePictureImageReader();
         /*if( previewImageReader != null ) {
@@ -3799,7 +3799,7 @@ public class CameraController2 extends CameraController {
     public void setPictureSize(int width, int height) {
         if( MyDebug.LOG )
             Log.i(TAG, "setPictureSize: " + width + " x " + height);
-        if( camera == null ) {
+        if( mCameraDevice == null ) {
             if( MyDebug.LOG )
                 Log.e(TAG, "no camera");
             return;
@@ -3820,7 +3820,7 @@ public class CameraController2 extends CameraController {
             Log.i(TAG, "setRaw: " + want_raw);
             Log.i(TAG, "max_raw_images: " + max_raw_images);
         }
-        if( camera == null ) {
+        if( mCameraDevice == null ) {
             if( MyDebug.LOG )
                 Log.e(TAG, "no camera");
             return;
@@ -3847,7 +3847,7 @@ public class CameraController2 extends CameraController {
     public void setVideoHighSpeed(boolean want_video_high_speed) {
         if( MyDebug.LOG )
             Log.i(TAG, "setVideoHighSpeed: " + want_video_high_speed);
-        if( camera == null ) {
+        if( mCameraDevice == null ) {
             if( MyDebug.LOG )
                 Log.e(TAG, "no camera");
             return;
@@ -3869,7 +3869,7 @@ public class CameraController2 extends CameraController {
     public void setBurstType(BurstType burst_type) {
         if( MyDebug.LOG )
             Log.i(TAG, "setBurstType: " + burst_type);
-        if( camera == null ) {
+        if( mCameraDevice == null ) {
             if( MyDebug.LOG )
                 Log.e(TAG, "no camera");
             return;
@@ -4016,7 +4016,7 @@ public class CameraController2 extends CameraController {
     public void setUseCamera2FakeFlash(boolean use_fake_precapture) {
         if( MyDebug.LOG )
             Log.i(TAG, "setUseCamera2FakeFlash: " + use_fake_precapture);
-        if( camera == null ) {
+        if( mCameraDevice == null ) {
             if( MyDebug.LOG )
                 Log.e(TAG, "no camera");
             return;
@@ -5048,7 +5048,7 @@ public class CameraController2 extends CameraController {
         if( MyDebug.LOG )
             Log.i(TAG, "setRepeatingRequest");
         synchronized( background_camera_lock ) {
-            if( camera == null || captureSession == null ) {
+            if( mCameraDevice == null || captureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -5082,7 +5082,7 @@ public class CameraController2 extends CameraController {
         if( MyDebug.LOG )
             Log.i(TAG, "capture");
         synchronized( background_camera_lock ) {
-            if( camera == null || captureSession == null ) {
+            if( mCameraDevice == null || captureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -5094,15 +5094,15 @@ public class CameraController2 extends CameraController {
     private void createPreviewRequest() {
         if( MyDebug.LOG )
             Log.i(TAG, "createPreviewRequest");
-        if( camera == null  ) {
+        if( mCameraDevice == null  ) {
             if( MyDebug.LOG )
                 Log.i(TAG, "camera not available!");
             return;
         }
         if( MyDebug.LOG )
-            Log.i(TAG, "camera: " + camera);
+            Log.i(TAG, "camera: " + mCameraDevice);
         try {
-            previewBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            previewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             previewIsVideoMode = false;
             previewBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_PREVIEW);
             camera_settings.setupBuilder(previewBuilder, false);
@@ -5153,7 +5153,7 @@ public class CameraController2 extends CameraController {
                 Log.i(TAG, "previewBuilder not present!");
             throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
         }
-        if( camera == null ) {
+        if( mCameraDevice == null ) {
             if( MyDebug.LOG )
                 Log.e(TAG, "no camera");
             return;
@@ -5234,7 +5234,7 @@ public class CameraController2 extends CameraController {
                         Log.i(TAG, "onConfigured: " + session);
                         Log.i(TAG, "captureSession was: " + captureSession);
                     }
-                    if( camera == null ) {
+                    if( mCameraDevice == null ) {
                         if( MyDebug.LOG ) {
                             Log.i(TAG, "camera is closed");
                         }
@@ -5369,14 +5369,14 @@ public class CameraController2 extends CameraController {
             }
             if( video_recorder != null && want_video_high_speed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
             //if( want_video_high_speed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
-                camera.createConstrainedHighSpeedCaptureSession(surfaces,
+                mCameraDevice.createConstrainedHighSpeedCaptureSession(surfaces,
                     myStateCallback,
                     handler);
                 is_video_high_speed = true;
             }
             else {
                 try {
-                    camera.createCaptureSession(surfaces,
+                    mCameraDevice.createCaptureSession(surfaces,
                         myStateCallback,
                         handler);
                     is_video_high_speed = false;
@@ -5486,7 +5486,7 @@ public class CameraController2 extends CameraController {
         if( MyDebug.LOG )
             Log.i(TAG, "stopPreview: " + this);
         synchronized( background_camera_lock ) {
-            if( camera == null || captureSession == null ) {
+            if( mCameraDevice == null || captureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -5612,7 +5612,7 @@ public class CameraController2 extends CameraController {
         AutoFocusCallback push_autofocus_cb = null;
         synchronized( background_camera_lock ) {
             fake_precapture_torch_focus_performed = false;
-            if( camera == null || captureSession == null ) {
+            if( mCameraDevice == null || captureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 // should call the callback, so the application isn't left waiting (e.g., when we autofocus before trying to take a photo)
@@ -5758,7 +5758,7 @@ public class CameraController2 extends CameraController {
         if( MyDebug.LOG )
             Log.i(TAG, "cancelAutoFocus");
         synchronized( background_camera_lock ) {
-            if( camera == null || captureSession == null ) {
+            if( mCameraDevice == null || captureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -5894,7 +5894,7 @@ public class CameraController2 extends CameraController {
         ErrorCallback push_take_picture_error_cb = null;
 
         synchronized( background_camera_lock ) {
-            if( camera == null || captureSession == null ) {
+            if( mCameraDevice == null || captureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -5910,7 +5910,7 @@ public class CameraController2 extends CameraController {
                         Log.i(TAG, "imageReader surface: " + imageReader.getSurface().toString());
                     }
                 }
-                stillBuilder = camera.createCaptureRequest(previewIsVideoMode ? CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
+                stillBuilder = mCameraDevice.createCaptureRequest(previewIsVideoMode ? CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
                 stillBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_STILL_CAPTURE);
                 stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE));
                 camera_settings.setupBuilder(stillBuilder, true);
@@ -6002,7 +6002,7 @@ public class CameraController2 extends CameraController {
 
         if( ok ) {
             synchronized( background_camera_lock ) {
-                if( camera == null || captureSession == null ) {
+                if( mCameraDevice == null || captureSession == null ) {
                     if( MyDebug.LOG )
                         Log.i(TAG, "no camera or capture session");
                     return;
@@ -6141,7 +6141,7 @@ public class CameraController2 extends CameraController {
         ErrorCallback push_take_picture_error_cb = null;
 
         synchronized( background_camera_lock ) {
-            if( camera == null || captureSession == null ) {
+            if( mCameraDevice == null || captureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -6152,7 +6152,7 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "imageReader surface: " + imageReader.getSurface().toString());
                 }
 
-                CaptureRequest.Builder stillBuilder = camera.createCaptureRequest(previewIsVideoMode ? CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
+                CaptureRequest.Builder stillBuilder = mCameraDevice.createCaptureRequest(previewIsVideoMode ? CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
                 stillBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_STILL_CAPTURE);
                 // n.b., don't set RequestTagType.CAPTURE here - we only do it for the last of the burst captures (see below)
                 camera_settings.setupBuilder(stillBuilder, true);
@@ -6415,7 +6415,7 @@ public class CameraController2 extends CameraController {
 
         if( ok ) {
             synchronized( background_camera_lock ) {
-                if( camera == null || captureSession == null ) {
+                if( mCameraDevice == null || captureSession == null ) {
                     if( MyDebug.LOG )
                         Log.i(TAG, "no camera or capture session");
                     return;
@@ -6487,7 +6487,7 @@ public class CameraController2 extends CameraController {
         ErrorCallback push_take_picture_error_cb = null;
 
         synchronized( background_camera_lock ) {
-            if( camera == null || captureSession == null ) {
+            if( mCameraDevice == null || captureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -6498,7 +6498,7 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "imageReader surface: " + imageReader.getSurface().toString());
                 }
 
-                CaptureRequest.Builder stillBuilder = camera.createCaptureRequest(previewIsVideoMode ? CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
+                CaptureRequest.Builder stillBuilder = mCameraDevice.createCaptureRequest(previewIsVideoMode ? CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
                 stillBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_STILL_CAPTURE);
                 // n.b., don't set RequestTagType.CAPTURE here - we only do it for the last of the burst captures (see below)
                 camera_settings.setupBuilder(stillBuilder, true);
@@ -6657,7 +6657,7 @@ public class CameraController2 extends CameraController {
 
         if( ok ) {
             synchronized( background_camera_lock ) {
-                if( camera == null || captureSession == null ) {
+                if( mCameraDevice == null || captureSession == null ) {
                     if( MyDebug.LOG )
                         Log.i(TAG, "no camera or capture session");
                     return;
@@ -6742,7 +6742,7 @@ public class CameraController2 extends CameraController {
                                 ErrorCallback push_take_picture_error_cb = null;
 
                                 synchronized( background_camera_lock ) {
-                                    if( camera == null || captureSession == null ) {
+                                    if( mCameraDevice == null || captureSession == null ) {
                                         if( MyDebug.LOG )
                                             Log.i(TAG, "no camera or capture session");
                                         return;
@@ -6825,7 +6825,7 @@ public class CameraController2 extends CameraController {
             }
             try {
                 // use a separate builder for precapture - otherwise have problem that if we take photo with flash auto/on of dark scene, then point to a bright scene, the autoexposure isn't running until we autofocus again
-                final CaptureRequest.Builder precaptureBuilder = camera.createCaptureRequest(previewIsVideoMode ? CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
+                final CaptureRequest.Builder precaptureBuilder = mCameraDevice.createCaptureRequest(previewIsVideoMode ? CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
                 precaptureBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_STILL_CAPTURE);
 
                 camera_settings.setupBuilder(precaptureBuilder, false);
@@ -7026,7 +7026,7 @@ public class CameraController2 extends CameraController {
         boolean call_runPrecapture = false;
 
         synchronized( background_camera_lock ) {
-            if( camera == null || captureSession == null ) {
+            if( mCameraDevice == null || captureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 error.onError();
@@ -7172,14 +7172,14 @@ public class CameraController2 extends CameraController {
     public void initVideoRecorderPostPrepare(MediaRecorder video_recorder, boolean want_photo_video_recording) throws CameraControllerException {
         if( MyDebug.LOG )
             Log.i(TAG, "initVideoRecorderPostPrepare");
-        if( camera == null ) {
+        if( mCameraDevice == null ) {
             Log.e(TAG, "no camera");
             throw new CameraControllerException();
         }
         try {
             if( MyDebug.LOG )
                 Log.i(TAG, "obtain video_recorder surface");
-            previewBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+            previewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
             if( MyDebug.LOG )
                 Log.i(TAG, "done");
             previewIsVideoMode = true;

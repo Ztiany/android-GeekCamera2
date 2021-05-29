@@ -29,7 +29,7 @@ import androidx.annotation.NonNull;
  */
 public abstract class CameraController {
     private static final String TAG = "GC2_CC";
-    private final int cameraId;
+    private final int mCameraId;
 
     public static final String SCENE_MODE_DEFAULT = "auto"; // chosen to match Camera.Parameters.SCENE_MODE_AUTO, but we also use compatible values for Camera2 API
     public static final String COLOR_EFFECT_DEFAULT = "none"; // chosen to match Camera.Parameters.EFFECT_NONE, but we also use compatible values for Camera2 API
@@ -304,12 +304,12 @@ public abstract class CameraController {
     public abstract void onError(); // triggers error mechanism - should only be called externally for testing purposes
 
     CameraController(int cameraId) {
-        this.cameraId = cameraId;
+        this.mCameraId = cameraId;
     }
     public abstract String getAPI();
     public abstract CameraFeatures getCameraFeatures() throws CameraControllerException;
     public int getCameraId() {
-        return cameraId;
+        return mCameraId;
     }
 
     /** For CameraController2 only. Applications should cover the preview textureview if either camera_controller==null, or if this

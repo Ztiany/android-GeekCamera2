@@ -50,6 +50,11 @@ public class CameraControllerManager1 extends CameraControllerManager {
 
     @Override
     public String getHardwareLevel(Context context, int cameraId) {
-        return "API";
+        return "API1";
+    }
+
+    @Override
+    public boolean isLogicalMultiCamera(Context context, int cameraId) {
+        return false;
     }
 }
