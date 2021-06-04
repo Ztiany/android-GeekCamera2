@@ -1,6 +1,7 @@
 package com.deepinout.geekcamera.cameracontroller;
 
 import com.deepinout.geekcamera.MyDebug;
+import com.deepinout.geekcamera.MyUtils;
 import com.deepinout.geekcamera.R;
 
 import android.annotation.TargetApi;
@@ -45,6 +46,7 @@ public class CameraControllerManager2 extends CameraControllerManager {
                 if(MyDebug.LOG) {
                     Log.d(TAG, "CameraID:" +i + ", Facing:" + getFacing(i));
                 }
+                getHardwareLevel(mContext, i);
             }
             return cameraIdArray.length;
         } catch(Throwable e) {
@@ -123,19 +125,19 @@ public class CameraControllerManager2 extends CameraControllerManager {
             int hardware_level = characteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
             switch (hardware_level) {
                 case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY:
-                    Log.d(TAG, "Hardware Level: LEGACY");
+                    Log.d(TAG, "CameraId:" + cameraId + ",Hardware Level: LEGACY");
                     return "LEGACY";
                 case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED:
-                    Log.d(TAG, "Hardware Level: LIMITED");
+                    Log.d(TAG, "CameraId:" + cameraId + ",Hardware Level: LIMITED");
                     return "LIMITED";
                 case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL:
-                    Log.d(TAG, "Hardware Level: FULL");
+                    Log.d(TAG, "CameraId:" + cameraId + ",Hardware Level: FULL");
                     return "FULL";
                 case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_3:
-                    Log.d(TAG, "Hardware Level: Level 3");
+                    Log.d(TAG, "CameraId:" + cameraId + ",Hardware Level: Level 3");
                     return "LEVEL_3";
                 case CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL:
-                    Log.d(TAG, "Hardware Level: Level EXTERNAL");
+                    Log.d(TAG, "CameraId:" + cameraId + ",Hardware Level: Level EXTERNAL");
                     return "EXTERNAL";
                 default:
                     Log.e(TAG, "Unknown Hardware Level: " + hardware_level);
@@ -156,6 +158,10 @@ public class CameraControllerManager2 extends CameraControllerManager {
             CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
             Set<String> phySicalCameraIds = characteristics.getPhysicalCameraIds();
             int[] capabilities = characteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES);
+            List<String> capabilitiesStringList = MyUtils.convertCapabilityToString(capabilities);
+            if (MyDebug.LOG) {
+                Log.d(TAG, "LogicalCamera: " + cameraIdS + ", Capabilities:" + capabilitiesStringList.toString());
+            }
             List<Integer> capabilitiesList = new ArrayList<>();
             for(Integer capability : capabilities) {
                 capabilitiesList.add(capability);
