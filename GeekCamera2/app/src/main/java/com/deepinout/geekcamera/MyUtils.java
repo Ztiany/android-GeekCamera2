@@ -1,7 +1,12 @@
 package com.deepinout.geekcamera;
 
+import android.graphics.ImageFormat;
+import android.graphics.PixelFormat;
 import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraMetadata;
 import android.util.Log;
+
+import com.deepinout.geekcamera.cameracontroller.CameraController;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -95,5 +100,54 @@ public class MyUtils {
 //         }
 
         return output_capabilities_string;
+    }
+
+    public static String formatToString(int format) {
+        switch (format) {
+            case ImageFormat.YV12:
+                return "YV12" + "(" + format + ")";
+            case ImageFormat.YUV_420_888:
+                return "YUV_420_888" + "(" + format + ")";
+            case ImageFormat.NV21:
+                return "NV21" + "(" + format + ")";
+            case ImageFormat.NV16:
+                return "NV16" + "(" + format + ")";
+            case PixelFormat.RGB_565:
+                return "RGB_565" + "(" + format + ")";
+            case PixelFormat.RGBA_8888:
+                return "RGBA_8888" + "(" + format + ")";
+            case PixelFormat.RGBX_8888:
+                return "RGBX_8888" + "(" + format + ")";
+            case PixelFormat.RGB_888:
+                return "RGB_888" + "(" + format + ")";
+            case ImageFormat.JPEG:
+                return "JPEG" + "(" + format + ")";
+            case ImageFormat.YUY2:
+                return "YUY2" + "(" + format + ")";
+            case ImageFormat.Y8:
+                return "Y8" + "(" + format + ")";
+//            case ImageFormat.Y16:
+//                return "Y16";
+            case ImageFormat.RAW_SENSOR:
+                return "RAW_SENSOR" + "(" + format + ")";
+            case ImageFormat.RAW_PRIVATE:
+                return "RAW_PRIVATE" + "(" + format + ")";
+            case ImageFormat.RAW10:
+                return "RAW10" + "(" + format + ")";
+            case ImageFormat.DEPTH16:
+                return "DEPTH16" + "(" + format + ")";
+            case ImageFormat.DEPTH_POINT_CLOUD:
+                return "DEPTH_POINT_CLOUD" + "(" + format + ")";
+            case ImageFormat.DEPTH_JPEG:
+                return "DEPTH_JPEG" + "(" + format + ")";
+//            case ImageFormat.RAW_DEPTH:
+//                return "RAW_DEPTH";
+            case ImageFormat.PRIVATE:
+                return "PRIVATE" + "(" + format + ")";
+            case ImageFormat.HEIC:
+                return "HEIC" + "(" + format + ")";
+            default:
+                return "" + format;
+        }
     }
 }

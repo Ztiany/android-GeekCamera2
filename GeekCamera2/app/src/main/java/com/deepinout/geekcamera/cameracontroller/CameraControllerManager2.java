@@ -7,15 +7,23 @@ import com.deepinout.geekcamera.R;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Rect;
+import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
+import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.ImageReader;
+import android.media.MediaCodec;
+import android.media.MediaRecorder;
 import android.os.Build;
+import android.renderscript.Allocation;
 import android.util.Log;
+import android.util.Range;
+import android.util.Size;
 import android.util.SizeF;
+import android.view.SurfaceHolder;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -28,10 +36,12 @@ public class CameraControllerManager2 extends CameraControllerManager {
 
     private final Context mContext;
     CameraManager mCameraManager;
+    private boolean mPrintedInfo;
 
     public CameraControllerManager2(Context context) {
         this.mContext = context;
         mCameraManager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
+        mPrintedInfo = false;
     }
 
     @Override
@@ -41,12 +51,16 @@ public class CameraControllerManager2 extends CameraControllerManager {
             if(MyDebug.LOG) {
                 Log.d(TAG, "getCameraIdList length:" + cameraIdArray.length);
             }
-            for (int i = 0; i < cameraIdArray.length; i++) {
-                isLogicalMultiCamera(mContext, i);
-                if(MyDebug.LOG) {
-                    Log.d(TAG, "CameraID:" +i + ", Facing:" + getFacing(i));
+            if (!mPrintedInfo) {
+                for (int i = 0; i < cameraIdArray.length; i++) {
+                    isLogicalMultiCamera(mContext, i);
+                    if(MyDebug.LOG) {
+                        Log.d(TAG, "CameraID:" +i + ", Facing:" + getFacing(i));
+                    }
+                    getHardwareLevel(mContext, i);
+                    printStreamConfigurationMap(mContext, i);
                 }
-                getHardwareLevel(mContext, i);
+                mPrintedInfo = true;
             }
             return cameraIdArray.length;
         } catch(Throwable e) {
@@ -281,5 +295,128 @@ public class CameraControllerManager2 extends CameraControllerManager {
             e.printStackTrace();
         }
         return false;
+    }
+
+    private void printStreamConfigurationMap(Context context, int cameraId) {
+        Log.i(TAG, "StreamConfigurationMap++++++++++++++++++++++++++++++++++++++++++++++");
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            StreamConfigurationMap streamConfigurationMap =
+                    characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+
+            Class[] surfaceClasses = new Class[6];
+            surfaceClasses[0] = ImageReader.class;
+            surfaceClasses[1] = SurfaceTexture.class;
+            surfaceClasses[2] = SurfaceHolder.class;
+            surfaceClasses[3] = MediaRecorder.class;
+            surfaceClasses[4] = MediaCodec.class;
+            surfaceClasses[5] = Allocation.class;
+
+            // 打印输出流配置信息: format, outputsize, minframeduration, stallframeduration
+            // 打印高分辨率流配置信息
+            for (int u = 0; u < surfaceClasses.length; u++) {
+                Size[] surfaceSupportedOutputSizes = streamConfigurationMap.getOutputSizes(surfaceClasses[u]);
+                if (surfaceSupportedOutputSizes != null) {
+                    for (int j = 0; j < surfaceSupportedOutputSizes.length; j++) {
+                        long minFrameDuration =
+                                streamConfigurationMap.getOutputMinFrameDuration(surfaceClasses[u], surfaceSupportedOutputSizes[j]);
+                        long stallFrameDuration =
+                                streamConfigurationMap.getOutputStallDuration(surfaceClasses[u], surfaceSupportedOutputSizes[j]);
+                        if (MyDebug.LOG) {
+                            Log.i(TAG, "StreamConfigurationMap-Output-Surface CameraID:" + cameraIdS +
+                                    ", Surface Class:" + surfaceClasses[u] +
+                                    ", Size:" + surfaceSupportedOutputSizes[j] +
+                                    ", MinFrameDuration:" + minFrameDuration / 1000000 + "ms" +
+                                    ", StallFrameDuration:" + stallFrameDuration / 1000000 + "ms");
+                        }
+
+                    }
+                }
+            }
+
+            int[] outputFormats = streamConfigurationMap.getOutputFormats();
+            for (int i = 0; i < outputFormats.length; i++) {
+                Size[] outputSizeByFormat = streamConfigurationMap.getOutputSizes(outputFormats[i]);
+                for (int j = 0; j < outputSizeByFormat.length; j++) {
+                    long minFrameDuration =
+                            streamConfigurationMap.getOutputMinFrameDuration(outputFormats[i], outputSizeByFormat[j]);
+                    long stallFrameDuration =
+                            streamConfigurationMap.getOutputStallDuration(outputFormats[i], outputSizeByFormat[j]);
+                    if (MyDebug.LOG) {
+                        Log.i(TAG, "StreamConfigurationMap-Output CameraID:" + cameraIdS + ", format:" + MyUtils.formatToString(outputFormats[i]) +
+                                ", OutputSize:" + outputSizeByFormat[j] +
+                                ", MinFrameDuration:" + minFrameDuration / 1000000 + "ms" +
+                                ", StallFrameDuration:" + stallFrameDuration / 1000000 + "ms");
+                    }
+
+                }
+                Size[] highResolutionOutputSizeByFormats =
+                        streamConfigurationMap.getHighResolutionOutputSizes(outputFormats[i]);
+                if (highResolutionOutputSizeByFormats != null) {
+                    if (MyDebug.LOG) {
+                        Log.i(TAG, "StreamConfigurationMap-HighResolutionOutput CameraID:" + cameraIdS + ", format:" + MyUtils.formatToString(outputFormats[i]) +
+                                ", outputFormats length:" + highResolutionOutputSizeByFormats.length);
+                    }
+                    for (int j = 0; j < highResolutionOutputSizeByFormats.length; j++) {
+                        long minFrameDuration =
+                                streamConfigurationMap.getOutputMinFrameDuration(outputFormats[i], highResolutionOutputSizeByFormats[j]);
+                        long stallFrameDuration =
+                                streamConfigurationMap.getOutputStallDuration(outputFormats[i], highResolutionOutputSizeByFormats[j]);
+                        if (MyDebug.LOG) {
+                            Log.i(TAG, "StreamConfigurationMap-HighResolutionOutput CameraID:" + cameraIdS + ", format:" + MyUtils.formatToString(outputFormats[i]) +
+                                    ", OutputSize:" + highResolutionOutputSizeByFormats[j] +
+                                    ", MinFrameDuration:" + minFrameDuration / 1000000 + "ms" +
+                                    ", StallFrameDuration:" + stallFrameDuration / 1000000 + "ms");
+                        }
+                    }
+                }
+            }
+
+            // 打印高帧率流配置信息
+            Size[] highSpeedVideoSizes = streamConfigurationMap.getHighSpeedVideoSizes();
+            for (int i = 0; i < highSpeedVideoSizes.length; i++) {
+                Range<Integer>[] fpsRangeForSize =
+                        streamConfigurationMap.getHighSpeedVideoFpsRangesFor(highSpeedVideoSizes[i]);
+                StringBuilder fpsRangeForSizeInfo = new StringBuilder();
+                fpsRangeForSizeInfo.append("Supported fps ranges:");
+                for(int j = 0; j < fpsRangeForSize.length; j++) {
+                    fpsRangeForSizeInfo.append(fpsRangeForSize[j]).append(",");
+                }
+                if (MyDebug.LOG) {
+                    Log.i(TAG, "StreamConfigurationMap-HighSpeed CameraID:" + cameraIdS +
+                            ", (size, fpsranges)= " + "(" + highSpeedVideoSizes[i] + "," + fpsRangeForSizeInfo.toString());
+                }
+            }
+
+            // 打印输入流配置信息
+            int[] inputFormats = streamConfigurationMap.getInputFormats();
+            if (MyDebug.LOG) {
+                Log.i(TAG, "StreamConfigurationMap-Input CameraID:" + cameraIdS + ", format length:" + inputFormats.length);
+            }
+            for (int i = 0; i < inputFormats.length; i++) {
+                StringBuilder inputPrintinfo = new StringBuilder();
+                Size[] inputSizesForFormat = streamConfigurationMap.getInputSizes(inputFormats[i]);
+                inputPrintinfo.append("supported Input sizes:");
+                for (int j = 0; j < inputSizesForFormat.length; j++) {
+                    inputPrintinfo.append(inputSizesForFormat[j].toString()).append(",");
+                }
+                int[] outputFormatsForInput = streamConfigurationMap.getValidOutputFormatsForInput(inputFormats[i]);
+                inputPrintinfo.append("supported Output formats:");
+                for (int k = 0; k < outputFormatsForInput.length; k++) {
+                    inputPrintinfo.append(MyUtils.formatToString(outputFormatsForInput[k])).append(",");
+                }
+                if (MyDebug.LOG) {
+                    Log.i(TAG, "StreamConfigurationMap-Input CameraID:" + cameraIdS +
+                            ", input format:" + inputFormats[i] +
+                            ", " + inputPrintinfo.toString());
+                }
+            }
+            Log.i(TAG, "StreamConfigurationMap----------------------------------------------");
+        } catch (Throwable e) {
+            if( MyDebug.LOG )
+                Log.e(TAG, "StreamConfigurationMap exception: " + e.toString());
+            e.printStackTrace();
+        }
     }
 }

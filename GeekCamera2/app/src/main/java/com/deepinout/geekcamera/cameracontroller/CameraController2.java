@@ -15,6 +15,7 @@ import java.util.Queue;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.ImageFormat;
+import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
@@ -214,11 +215,11 @@ public class CameraController2 extends CameraController {
     private Handler handler;
     private Surface video_recorder_surface;
 
-    private int preview_width;
-    private int preview_height;
+    private int mPreviewWidth;
+    private int mPreviewHeight;
     
-    private int picture_width;
-    private int picture_height;
+    private int mPictureWidth;
+    private int mPictureHeight;
     
     private static final int STATE_NORMAL = 0;
     private static final int STATE_WAITING_AUTOFOCUS = 1;
@@ -3705,7 +3706,7 @@ public class CameraController2 extends CameraController {
 
     @Override
     public Size getPictureSize() {
-        return new Size(picture_width, picture_height);
+        return new Size(mPictureWidth, mPictureHeight);
     }
 
     @Override
@@ -3723,8 +3724,8 @@ public class CameraController2 extends CameraController {
                 Log.e(TAG, "can't set picture size when captureSession running!");
             throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
         }
-        this.picture_width = width;
-        this.picture_height = height;
+        this.mPictureWidth = width;
+        this.mPictureHeight = height;
     }
 
     @Override
@@ -3957,13 +3958,13 @@ public class CameraController2 extends CameraController {
             throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
         }
         closePictureImageReader();
-        if( picture_width == 0 || picture_height == 0 ) {
+        if( mPictureWidth == 0 || mPictureHeight == 0 ) {
             if( MyDebug.LOG )
                 Log.e(TAG, "application needs to call setPictureSize()");
             throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
         }
         // maxImages only needs to be 2, as we always read the JPEG data and close the image straight away in the imageReader
-        imageReader = ImageReader.newInstance(picture_width, picture_height, ImageFormat.JPEG, 2);
+        imageReader = ImageReader.newInstance(mPictureWidth, mPictureHeight, ImageFormat.JPEG, 2);
         //imageReader = ImageReader.newInstance(picture_width, picture_height, ImageFormat.YUV_420_888, 2);
         if( MyDebug.LOG ) {
             Log.i(TAG, "created new imageReader: " + imageReader.toString());
@@ -4075,15 +4076,15 @@ public class CameraController2 extends CameraController {
 
     @Override
     public Size getPreviewSize() {
-        return new Size(preview_width, preview_height);
+        return new Size(mPreviewWidth, mPreviewHeight);
     }
 
     @Override
     public void setPreviewSize(int width, int height) {
         if( MyDebug.LOG )
             Log.i(TAG, "setPreviewSize: " + width + " , " + height);
-        preview_width = width;
-        preview_height = height;
+        mPreviewWidth = width;
+        mPreviewHeight = height;
         /*if( previewImageReader != null ) {
             previewImageReader.close();
         }
@@ -5043,16 +5044,16 @@ public class CameraController2 extends CameraController {
         if( MyDebug.LOG )
             Log.i(TAG, "updatePreviewTexture");
         if( texture != null ) {
-            if( preview_width == 0 || preview_height == 0 ) {
+            if( mPreviewWidth == 0 || mPreviewHeight == 0 ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "preview size not yet set");
             }
             else {
                 if( MyDebug.LOG )
-                    Log.i(TAG, "preview size: " + preview_width + " x " + preview_height);
-                this.test_texture_view_buffer_w = preview_width;
-                this.test_texture_view_buffer_h = preview_height;
-                texture.setDefaultBufferSize(preview_width, preview_height);
+                    Log.i(TAG, "preview size: " + mPreviewWidth + " x " + mPreviewHeight);
+                this.test_texture_view_buffer_w = mPreviewWidth;
+                this.test_texture_view_buffer_h = mPreviewHeight;
+                texture.setDefaultBufferSize(mPreviewWidth, mPreviewHeight);
             }
         }
     }
@@ -5098,8 +5099,8 @@ public class CameraController2 extends CameraController {
             if( texture != null ) {
                 // need to set the texture size
                 if( MyDebug.LOG )
-                    Log.i(TAG, "set size of preview texture: " + preview_width + " x " + preview_height);
-                if( preview_width == 0 || preview_height == 0 ) {
+                    Log.i(TAG, "set size of preview texture: " + mPreviewWidth + " x " + mPreviewHeight);
+                if( mPreviewWidth == 0 || mPreviewHeight == 0 ) {
                     if( MyDebug.LOG )
                         Log.e(TAG, "application needs to call setPreviewSize()");
                     throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
@@ -5128,7 +5129,7 @@ public class CameraController2 extends CameraController {
             /*if( MyDebug.LOG )
             Log.i(TAG, "preview size: " + previewImageReader.getWidth() + " x " + previewImageReader.getHeight());*/
             if( MyDebug.LOG )
-                Log.i(TAG, "set preview size: " + this.preview_width + " x " + this.preview_height);
+                Log.i(TAG, "set preview size: " + this.mPreviewWidth + " x " + this.mPreviewHeight);
 
             synchronized( background_camera_lock ) {
                 if( video_recorder != null )
