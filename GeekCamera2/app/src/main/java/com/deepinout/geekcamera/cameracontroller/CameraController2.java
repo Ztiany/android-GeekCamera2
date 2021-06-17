@@ -15,7 +15,6 @@ import java.util.Queue;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.ImageFormat;
-import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
@@ -209,8 +208,9 @@ public class CameraController2 extends CameraController {
     private List<int[]> ae_fps_ranges;
     private List<int[]> hs_fps_ranges;
     //private ImageReader previewImageReader;
-    private SurfaceTexture texture;
-    private Surface surface_texture;
+    private SurfaceTexture mSurfaceTexture;
+    private SurfaceHolder mSurfaceHolder;
+    private Surface mPreviewSurface;
     private HandlerThread thread;
     private Handler handler;
     private Surface video_recorder_surface;
@@ -2416,7 +2416,7 @@ public class CameraController2 extends CameraController {
         }
 
         android.util.Size [] camera_picture_sizes = configs.getOutputSizes(ImageFormat.JPEG);
-        camera_features.picture_sizes = new ArrayList<>();
+        camera_features.mSupportedPictureSizes = new ArrayList<>();
         if( android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M ) {
             android.util.Size [] camera_picture_sizes_hires = configs.getHighResolutionOutputSizes(ImageFormat.JPEG);
             if( camera_picture_sizes_hires != null ) {
@@ -2437,7 +2437,7 @@ public class CameraController2 extends CameraController {
                             Log.i(TAG, "high resolution [non-burst] picture size: " + camera_size.getWidth() + " x " + camera_size.getHeight());
                         CameraController.Size size = new CameraController.Size(camera_size.getWidth(), camera_size.getHeight());
                         size.supports_burst = false;
-                        camera_features.picture_sizes.add(size);
+                        camera_features.mSupportedPictureSizes.add(size);
                     }
                 }
             }
@@ -2451,12 +2451,12 @@ public class CameraController2 extends CameraController {
             for(android.util.Size camera_size : camera_picture_sizes) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "picture size: " + camera_size.getWidth() + " x " + camera_size.getHeight());
-                camera_features.picture_sizes.add(new CameraController.Size(camera_size.getWidth(), camera_size.getHeight()));
+                camera_features.mSupportedPictureSizes.add(new CameraController.Size(camera_size.getWidth(), camera_size.getHeight()));
             }
         }
         // sizes are usually already sorted from high to low, but sort just in case
         // note some devices do have sizes in a not fully sorted order (e.g., Nokia 8)
-        Collections.sort(camera_features.picture_sizes, new CameraController.SizeSorter());
+        Collections.sort(camera_features.mSupportedPictureSizes, new CameraController.SizeSorter());
         // test high resolution modes not supporting burst:
         //camera_features.picture_sizes.get(0).supports_burst = false;
 
@@ -2505,7 +2505,7 @@ public class CameraController2 extends CameraController {
         }
 
         android.util.Size[] camera_video_sizes = configs.getOutputSizes(MediaRecorder.class);
-        camera_features.video_sizes = new ArrayList<>();
+        camera_features.mSupportedVideoSizes = new ArrayList<>();
         int min_fps = 9999;
         for(int[] r : this.ae_fps_ranges) {
             min_fps = Math.min(min_fps, r[0]);
@@ -2524,17 +2524,17 @@ public class CameraController2 extends CameraController {
                 ArrayList<int[]> fr = new ArrayList<>();
                 fr.add(new int[] {min_fps, max_fps});
                 CameraController.Size normal_video_size = new CameraController.Size(camera_size.getWidth(), camera_size.getHeight(), fr, false);
-                camera_features.video_sizes.add(normal_video_size);
+                camera_features.mSupportedVideoSizes.add(normal_video_size);
                 if( MyDebug.LOG ) {
                     Log.i(TAG, "normal video size: " + normal_video_size);
                 }
             }
         }
-        Collections.sort(camera_features.video_sizes, new CameraController.SizeSorter());
+        Collections.sort(camera_features.mSupportedVideoSizes, new CameraController.SizeSorter());
 
         if( capabilities_high_speed_video ) {
             hs_fps_ranges = new ArrayList<>();
-            camera_features.video_sizes_high_speed = new ArrayList<>();
+            camera_features.mSupportedVideoSizesHighSpeed = new ArrayList<>();
 
             for (Range<Integer> r : configs.getHighSpeedVideoFpsRanges()) {
                 hs_fps_ranges.add(new int[] {r.getLower(), r.getUpper()});
@@ -2560,13 +2560,13 @@ public class CameraController2 extends CameraController {
                 if (MyDebug.LOG) {
                     Log.i(TAG, "high speed video size: " + hs_video_size);
                 }
-                camera_features.video_sizes_high_speed.add(hs_video_size);
+                camera_features.mSupportedVideoSizesHighSpeed.add(hs_video_size);
             }
-            Collections.sort(camera_features.video_sizes_high_speed, new CameraController.SizeSorter());
+            Collections.sort(camera_features.mSupportedVideoSizesHighSpeed, new CameraController.SizeSorter());
         }
 
         android.util.Size [] camera_preview_sizes = configs.getOutputSizes(SurfaceTexture.class);
-        camera_features.preview_sizes = new ArrayList<>();
+        camera_features.mSupportedPreviewSizes = new ArrayList<>();
         Point display_size = new Point();
         Activity activity = (Activity)context;
         {
@@ -2596,7 +2596,7 @@ public class CameraController2 extends CameraController {
                     // Google Camera filters anything larger than height 1080, with a todo saying to use device's measurements
                     continue;
                 }
-                camera_features.preview_sizes.add(new CameraController.Size(camera_size.getWidth(), camera_size.getHeight()));
+                camera_features.mSupportedPreviewSizes.add(new CameraController.Size(camera_size.getWidth(), camera_size.getHeight()));
             }
         }
 
@@ -4932,12 +4932,15 @@ public class CameraController2 extends CameraController {
 
     @Override
     public void setPreviewDisplay(SurfaceHolder holder) {
+        mSurfaceHolder = holder;
+        /*
         if( MyDebug.LOG ) {
             Log.i(TAG, "setPreviewDisplay");
             Log.e(TAG, "SurfaceHolder not supported for CameraController2!");
             Log.e(TAG, "Should use setPreviewTexture() instead");
         }
         throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
+         */
     }
 
     @Override
@@ -4946,12 +4949,12 @@ public class CameraController2 extends CameraController {
             Log.i(TAG, "setPreviewTexture: " + texture);
             Log.i(TAG, "surface: " + texture.getSurfaceTexture());
         }
-        if( this.texture != null ) {
+        if( this.mSurfaceTexture != null ) {
             if( MyDebug.LOG )
                 Log.i(TAG, "preview texture already set");
             throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
         }
-        this.texture = texture.getSurfaceTexture();
+        this.mSurfaceTexture = texture.getSurfaceTexture();
     }
 
     private void setRepeatingRequest() throws CameraAccessException {
@@ -5036,14 +5039,14 @@ public class CameraController2 extends CameraController {
 
     // should synchronize calls to this method using background_camera_lock
     private Surface getPreviewSurface() {
-        return surface_texture;
+        return mPreviewSurface;
     }
 
     @Override
     public void updatePreviewTexture() {
         if( MyDebug.LOG )
             Log.i(TAG, "updatePreviewTexture");
-        if( texture != null ) {
+        if( mSurfaceTexture != null ) {
             if( mPreviewWidth == 0 || mPreviewHeight == 0 ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "preview size not yet set");
@@ -5053,7 +5056,19 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "preview size: " + mPreviewWidth + " x " + mPreviewHeight);
                 this.test_texture_view_buffer_w = mPreviewWidth;
                 this.test_texture_view_buffer_h = mPreviewHeight;
-                texture.setDefaultBufferSize(mPreviewWidth, mPreviewHeight);
+                mSurfaceTexture.setDefaultBufferSize(mPreviewWidth, mPreviewHeight);
+            }
+        } else if (mSurfaceHolder != null) {
+            if( mPreviewWidth == 0 || mPreviewHeight == 0 ) {
+                if( MyDebug.LOG )
+                    Log.i(TAG, "preview size not yet set");
+            }
+            else {
+                if( MyDebug.LOG )
+                    Log.i(TAG, "preview size: " + mPreviewWidth + " x " + mPreviewHeight);
+                this.test_texture_view_buffer_w = mPreviewWidth;
+                this.test_texture_view_buffer_h = mPreviewHeight;
+                mSurfaceHolder.setFixedSize(mPreviewWidth, mPreviewHeight);
             }
         }
     }
@@ -5096,7 +5111,7 @@ public class CameraController2 extends CameraController {
                 // in some cases need to recreate picture imageReader and the texture default buffer size (e.g., see test testTakePhotoPreviewPaused())
                 createPictureImageReader();
             }
-            if( texture != null ) {
+            if(mSurfaceTexture != null || mSurfaceHolder != null) {
                 // need to set the texture size
                 if( MyDebug.LOG )
                     Log.i(TAG, "set size of preview texture: " + mPreviewWidth + " x " + mPreviewHeight);
@@ -5108,14 +5123,18 @@ public class CameraController2 extends CameraController {
                 updatePreviewTexture();
                 // also need to create a new surface for the texture, in case the size has changed - but make sure we remove the old one first!
                 synchronized( background_camera_lock ) {
-                    if( surface_texture != null ) {
+                    if( mPreviewSurface != null ) {
                         if( MyDebug.LOG )
-                            Log.i(TAG, "remove old target: " + surface_texture);
-                        previewBuilder.removeTarget(surface_texture);
+                            Log.i(TAG, "remove old target: " + mPreviewSurface);
+                        previewBuilder.removeTarget(mPreviewSurface);
                     }
-                    this.surface_texture = new Surface(texture);
+                    if (mSurfaceTexture != null) {
+                        this.mPreviewSurface = new Surface(mSurfaceTexture);
+                    } else if (mSurfaceHolder != null){
+                        this.mPreviewSurface = mSurfaceHolder.getSurface();
+                    }
                     if( MyDebug.LOG )
-                        Log.i(TAG, "created new target: " + surface_texture);
+                        Log.i(TAG, "created new target: " + mPreviewSurface);
                 }
             }
             if( video_recorder != null ) {
@@ -5261,7 +5280,7 @@ public class CameraController2 extends CameraController {
                     surfaces = Arrays.asList(preview_surface, imageReader.getSurface());
                 }
                 if( MyDebug.LOG ) {
-                    Log.i(TAG, "texture: " + texture);
+                    Log.i(TAG, "texture: " + mSurfaceTexture);
                     Log.i(TAG, "preview_surface: " + preview_surface);
                 }
             }

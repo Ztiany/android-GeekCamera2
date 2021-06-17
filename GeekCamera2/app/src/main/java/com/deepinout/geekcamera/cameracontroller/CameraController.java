@@ -63,10 +63,10 @@ public abstract class CameraController {
         public int max_zoom;
         public List<Integer> zoom_ratios;
         public boolean supports_face_detection;
-        public List<CameraController.Size> picture_sizes;
-        public List<CameraController.Size> video_sizes;
-        public List<CameraController.Size> video_sizes_high_speed; // may be null if high speed not supported
-        public List<CameraController.Size> preview_sizes;
+        public List<CameraController.Size> mSupportedPictureSizes;
+        public List<CameraController.Size> mSupportedVideoSizes;
+        public List<CameraController.Size> mSupportedVideoSizesHighSpeed; // may be null if high speed not supported
+        public List<CameraController.Size> mSupportedPreviewSizes;
         public List<String> supported_flash_values;
         public List<String> supported_focus_values;
         public List<String> supported_capabilitys;

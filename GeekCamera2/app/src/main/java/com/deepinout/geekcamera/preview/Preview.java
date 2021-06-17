@@ -2092,7 +2092,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             }
             this.minimum_focus_distance = camera_features.minimum_focus_distance;
             this.supports_face_detection = camera_features.supports_face_detection;
-            this.mPhotoSizes = camera_features.picture_sizes;
+            this.mPhotoSizes = camera_features.mSupportedPictureSizes;
             if( test_burst_resolution ) {
                 // this flag means we pretend the largest resolution doesn't support burst
                 CameraController.Size current_size = null;
@@ -2136,10 +2136,10 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             this.supports_raw = camera_features.supports_raw;
             this.view_angle_x = camera_features.view_angle_x;
             this.view_angle_y = camera_features.view_angle_y;
-            this.supports_video_high_speed = camera_features.video_sizes_high_speed != null && camera_features.video_sizes_high_speed.size() > 0;
-            this.video_quality_handler.setVideoSizes(camera_features.video_sizes);
-            this.video_quality_handler.setVideoSizesHighSpeed(camera_features.video_sizes_high_speed);
-            this.mSupportedPreviewSizes = camera_features.preview_sizes;
+            this.supports_video_high_speed = camera_features.mSupportedVideoSizesHighSpeed != null && camera_features.mSupportedVideoSizesHighSpeed.size() > 0;
+            this.video_quality_handler.setVideoSizes(camera_features.mSupportedVideoSizes);
+            this.video_quality_handler.setVideoSizesHighSpeed(camera_features.mSupportedVideoSizesHighSpeed);
+            this.mSupportedPreviewSizes = camera_features.mSupportedPreviewSizes;
             this.supported_capabilitys = camera_features.supported_capabilitys;
         }
     }

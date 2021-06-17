@@ -324,16 +324,16 @@ public class CameraController1 extends CameraController {
             Log.e(TAG, "getSupportedPictureSizes() returned null!");
             throw new CameraControllerException();
         }
-        camera_features.picture_sizes = new ArrayList<>();
+        camera_features.mSupportedPictureSizes = new ArrayList<>();
         //camera_features.picture_sizes.add(new CameraController.Size(1920, 1080)); // test
         for(Camera.Size camera_size : camera_picture_sizes) {
             // we leave supports_burst as true - strictly speaking it should be false, but we'll never use a fast burst mode
             // with CameraController1 anyway
-            camera_features.picture_sizes.add(new CameraController.Size(camera_size.width, camera_size.height));
+            camera_features.mSupportedPictureSizes.add(new CameraController.Size(camera_size.width, camera_size.height));
         }
         // sizes are usually already sorted from high to low, but sort just in case
         // note some devices do have sizes in a not fully sorted order (e.g., Nokia 8)
-        Collections.sort(camera_features.picture_sizes, new CameraController.SizeSorter());
+        Collections.sort(camera_features.mSupportedPictureSizes, new CameraController.SizeSorter());
 
         //camera_features.supported_flash_modes = parameters.getSupportedFlashModes(); // Android format
         List<String> supported_flash_modes = parameters.getSupportedFlashModes(); // Android format
@@ -364,18 +364,18 @@ public class CameraController1 extends CameraController {
                 Log.d(TAG, "take video_sizes from preview sizes");
             camera_video_sizes = parameters.getSupportedPreviewSizes();
         }
-        camera_features.video_sizes = new ArrayList<>();
+        camera_features.mSupportedVideoSizes = new ArrayList<>();
         //camera_features.video_sizes.add(new CameraController.Size(1920, 1080)); // test
         for(Camera.Size camera_size : camera_video_sizes) {
-            camera_features.video_sizes.add(new CameraController.Size(camera_size.width, camera_size.height));
+            camera_features.mSupportedVideoSizes.add(new CameraController.Size(camera_size.width, camera_size.height));
         }
         // sizes are usually already sorted from high to low, but sort just in case
-        Collections.sort(camera_features.video_sizes, new CameraController.SizeSorter());
+        Collections.sort(camera_features.mSupportedVideoSizes, new CameraController.SizeSorter());
 
         List<Camera.Size> camera_preview_sizes = parameters.getSupportedPreviewSizes();
-        camera_features.preview_sizes = new ArrayList<>();
+        camera_features.mSupportedPreviewSizes = new ArrayList<>();
         for(Camera.Size camera_size : camera_preview_sizes) {
-            camera_features.preview_sizes.add(new CameraController.Size(camera_size.width, camera_size.height));
+            camera_features.mSupportedPreviewSizes.add(new CameraController.Size(camera_size.width, camera_size.height));
         }
 
         if( MyDebug.LOG )
