@@ -37,9 +37,13 @@ import android.hardware.camera2.params.TonemapCurve;
 import android.location.Location;
 import android.media.AudioManager;
 import androidx.exifinterface.media.ExifInterface;
+
+import android.media.CamcorderProfile;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaActionSound;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Handler;
@@ -54,6 +58,7 @@ import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.TextureView;
+import android.view.WindowManager;
 
 /** Provides support using Android 5's Camera 2 API
  *  android.hardware.camera2.*.
@@ -148,8 +153,8 @@ public class CameraController2 extends CameraController {
 
     private final ErrorCallback preview_error_cb;
     private final ErrorCallback camera_error_cb;
-    private CameraCaptureSession captureSession;
-    private CaptureRequest.Builder previewBuilder;
+    private CameraCaptureSession mCameraCaptureSession;
+    private CaptureRequest.Builder mPreviewBuilder;
     private boolean previewIsVideoMode;
     private AutoFocusCallback autofocus_cb;
     private boolean capture_follows_autofocus_hint;
@@ -205,7 +210,7 @@ public class CameraController2 extends CameraController {
     private ErrorCallback take_picture_error_cb;
     private boolean want_video_high_speed;
     private boolean is_video_high_speed; // whether we're actually recording in high speed
-    private List<int[]> ae_fps_ranges;
+    private List<int[]> mAeFpsRanges;
     private List<int[]> hs_fps_ranges;
     //private ImageReader previewImageReader;
     private SurfaceTexture mSurfaceTexture;
@@ -1381,8 +1386,8 @@ public class CameraController2 extends CameraController {
                     }
                     if( burst_type != BurstType.BURSTTYPE_FOCUS ) {
                         try {
-                            if( mCameraDevice != null && captureSession != null ) { // make sure camera wasn't released in the meantime
-                                captureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, handler);
+                            if( mCameraDevice != null && mCameraCaptureSession != null ) { // make sure camera wasn't released in the meantime
+                                mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, handler);
                             }
                         }
                         catch(CameraAccessException e) {
@@ -1398,7 +1403,7 @@ public class CameraController2 extends CameraController {
                             push_take_picture_error_cb = take_picture_error_cb;
                         }
                     }
-                    else if( previewBuilder != null ) { // make sure camera wasn't released in the meantime
+                    else if( mPreviewBuilder != null ) { // make sure camera wasn't released in the meantime
                         if( MyDebug.LOG )
                             Log.i(TAG, "focus bracketing");
 
@@ -1442,10 +1447,10 @@ public class CameraController2 extends CameraController {
                             if( MyDebug.LOG ) {
                                 Log.i(TAG, "prepare preview for next focus_distance: " + focus_distance);
                             }
-                            previewBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
-                            previewBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focus_distance);
+                            mPreviewBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
+                            mPreviewBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focus_distance);
 
-                            setRepeatingRequest(previewBuilder.build());
+                            setRepeatingRequest(mPreviewBuilder.build());
                         }
                         catch(CameraAccessException e) {
                             if( MyDebug.LOG ) {
@@ -1464,7 +1469,7 @@ public class CameraController2 extends CameraController {
                             public void run(){
                                 if( MyDebug.LOG )
                                     Log.i(TAG, "take picture after delay for next focus bracket");
-                                if( mCameraDevice != null && captureSession != null ) { // make sure camera wasn't released in the meantime
+                                if( mCameraDevice != null && mCameraCaptureSession != null ) { // make sure camera wasn't released in the meantime
                                     if( picture_cb.imageQueueWouldBlock(imageReaderRaw != null ? 1 : 0, 1) ) {
                                         if( MyDebug.LOG ) {
                                             Log.i(TAG, "...but wait for next focus bracket, as image queue would block");
@@ -1479,7 +1484,7 @@ public class CameraController2 extends CameraController {
 
                                         playSound(MediaActionSound.SHUTTER_CLICK);
                                         try {
-                                            captureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, handler);
+                                            mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, handler);
                                         }
                                         catch(CameraAccessException e) {
                                             if( MyDebug.LOG ) {
@@ -2045,13 +2050,13 @@ public class CameraController2 extends CameraController {
         if(MyDebug.LOG)
             Log.i(TAG, "release, id:" + getCameraId(), new Throwable());
         synchronized( background_camera_lock ) {
-            if( captureSession != null ) {
+            if( mCameraCaptureSession != null ) {
 //                captureSession.close();
-                captureSession = null;
+                mCameraCaptureSession = null;
                 //pending_request_when_ready = null;
             }
         }
-        previewBuilder = null;
+        mPreviewBuilder = null;
         previewIsVideoMode = false;
         if( mCameraDevice != null ) {
             mCameraDevice.close();
@@ -2415,51 +2420,6 @@ public class CameraController2 extends CameraController {
             throw new CameraControllerException();
         }
 
-        android.util.Size [] camera_picture_sizes = configs.getOutputSizes(ImageFormat.JPEG);
-        camera_features.mSupportedPictureSizes = new ArrayList<>();
-        if( android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M ) {
-            android.util.Size [] camera_picture_sizes_hires = configs.getHighResolutionOutputSizes(ImageFormat.JPEG);
-            if( camera_picture_sizes_hires != null ) {
-                for(android.util.Size camera_size : camera_picture_sizes_hires) {
-                    if( MyDebug.LOG )
-                        Log.i(TAG, "high resolution picture size: " + camera_size.getWidth() + " x " + camera_size.getHeight());
-                    // Check not already listed? If it's listed in both, we'll add it later on when scanning camera_picture_sizes
-                    // (and we don't want to set supports_burst to false for such a resolution).
-                    boolean found = false;
-                    for(android.util.Size sz : camera_picture_sizes) {
-                        if( sz.equals(camera_size) ) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if( !found ) {
-                        if( MyDebug.LOG )
-                            Log.i(TAG, "high resolution [non-burst] picture size: " + camera_size.getWidth() + " x " + camera_size.getHeight());
-                        CameraController.Size size = new CameraController.Size(camera_size.getWidth(), camera_size.getHeight());
-                        size.supports_burst = false;
-                        camera_features.mSupportedPictureSizes.add(size);
-                    }
-                }
-            }
-        }
-        if( camera_picture_sizes == null ) {
-            // camera_picture_sizes is null on Samsung Galaxy Note 10+ and S20 for camera ID 4!
-            Log.e(TAG, "no picture sizes returned by getOutputSizes");
-            throw new CameraControllerException();
-        }
-        else {
-            for(android.util.Size camera_size : camera_picture_sizes) {
-                if( MyDebug.LOG )
-                    Log.i(TAG, "picture size: " + camera_size.getWidth() + " x " + camera_size.getHeight());
-                camera_features.mSupportedPictureSizes.add(new CameraController.Size(camera_size.getWidth(), camera_size.getHeight()));
-            }
-        }
-        // sizes are usually already sorted from high to low, but sort just in case
-        // note some devices do have sizes in a not fully sorted order (e.g., Nokia 8)
-        Collections.sort(camera_features.mSupportedPictureSizes, new CameraController.SizeSorter());
-        // test high resolution modes not supporting burst:
-        //camera_features.picture_sizes.get(0).supports_burst = false;
-
         raw_size = null;
         if( capabilities_raw ) {
             android.util.Size [] raw_camera_picture_sizes = configs.getOutputSizes(ImageFormat.RAW_SENSOR);
@@ -2492,112 +2452,23 @@ public class CameraController2 extends CameraController {
             want_raw = false; // just in case it got set to true somehow
         }
 
-        ae_fps_ranges = new ArrayList<>();
+        mAeFpsRanges = new ArrayList<>();
         for (Range<Integer> r : characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)) {
-            ae_fps_ranges.add(new int[] {r.getLower(), r.getUpper()});
+            mAeFpsRanges.add(new int[] {r.getLower(), r.getUpper()});
         }
-        Collections.sort(ae_fps_ranges, new CameraController.RangeSorter());
+        Collections.sort(mAeFpsRanges, new CameraController.RangeSorter());
         if( MyDebug.LOG ) {
             Log.i(TAG, "Supported AE video fps ranges: ");
-            for (int[] f : ae_fps_ranges) {
+            for (int[] f : mAeFpsRanges) {
                 Log.i(TAG, "   ae range: [" + f[0] + "-" + f[1] + "]");
             }
         }
 
-        android.util.Size[] camera_video_sizes = configs.getOutputSizes(MediaRecorder.class);
-        camera_features.mSupportedVideoSizes = new ArrayList<>();
-        int min_fps = 9999;
-        for(int[] r : this.ae_fps_ranges) {
-            min_fps = Math.min(min_fps, r[0]);
-        }
-        if( camera_video_sizes == null ) {
-            // camera_video_sizes is null on Samsung Galaxy Note 10+ and S20 for camera ID 4!
-            Log.e(TAG, "no video sizes returned by getOutputSizes");
-            throw new CameraControllerException();
-        }
-        else {
-            for(android.util.Size camera_size : camera_video_sizes) {
-                if( camera_size.getWidth() > 4096 || camera_size.getHeight() > 2160 )
-                    continue; // Nexus 6 returns these, even though not supported?!
-                long mfd = configs.getOutputMinFrameDuration(MediaRecorder.class, camera_size);
-                int  max_fps = (int)((1.0 / mfd) * 1000000000L);
-                ArrayList<int[]> fr = new ArrayList<>();
-                fr.add(new int[] {min_fps, max_fps});
-                CameraController.Size normal_video_size = new CameraController.Size(camera_size.getWidth(), camera_size.getHeight(), fr, false);
-                camera_features.mSupportedVideoSizes.add(normal_video_size);
-                if( MyDebug.LOG ) {
-                    Log.i(TAG, "normal video size: " + normal_video_size);
-                }
-            }
-        }
-        Collections.sort(camera_features.mSupportedVideoSizes, new CameraController.SizeSorter());
-
+        doInitSupportedPreviewSizes(camera_features, configs);// for preview size list
+        doInitSupportedJpegSizes(camera_features, configs);   // for jpeg size list
+        doInitSupportedVideoSizes(camera_features, configs); // for normal video size list
         if( capabilities_high_speed_video ) {
-            hs_fps_ranges = new ArrayList<>();
-            camera_features.mSupportedVideoSizesHighSpeed = new ArrayList<>();
-
-            for (Range<Integer> r : configs.getHighSpeedVideoFpsRanges()) {
-                hs_fps_ranges.add(new int[] {r.getLower(), r.getUpper()});
-            }
-            Collections.sort(hs_fps_ranges, new CameraController.RangeSorter());
-            if( MyDebug.LOG ) {
-                Log.i(TAG, "Supported high speed video fps ranges: ");
-                for (int[] f : hs_fps_ranges) {
-                    Log.i(TAG, "   hs range: [" + f[0] + "-" + f[1] + "]");
-                }
-            }
-
-
-            android.util.Size[] camera_video_sizes_high_speed = configs.getHighSpeedVideoSizes();
-            for(android.util.Size camera_size : camera_video_sizes_high_speed) {
-                ArrayList<int[]> fr = new ArrayList<>();
-                for (Range<Integer> r : configs.getHighSpeedVideoFpsRangesFor(camera_size)) {
-                    fr.add(new int[] { r.getLower(), r.getUpper()});
-                }
-                if (camera_size.getWidth() > 4096 || camera_size.getHeight() > 2160)
-                    continue; // just in case? see above
-                CameraController.Size hs_video_size = new CameraController.Size(camera_size.getWidth(), camera_size.getHeight(), fr, true);
-                if (MyDebug.LOG) {
-                    Log.i(TAG, "high speed video size: " + hs_video_size);
-                }
-                camera_features.mSupportedVideoSizesHighSpeed.add(hs_video_size);
-            }
-            Collections.sort(camera_features.mSupportedVideoSizesHighSpeed, new CameraController.SizeSorter());
-        }
-
-        android.util.Size [] camera_preview_sizes = configs.getOutputSizes(SurfaceTexture.class);
-        camera_features.mSupportedPreviewSizes = new ArrayList<>();
-        Point display_size = new Point();
-        Activity activity = (Activity)context;
-        {
-            Display display = activity.getWindowManager().getDefaultDisplay();
-            display.getRealSize(display_size);
-            // getRealSize() is adjusted based on the current rotation, so should already be landscape format, but it
-            // would be good to not assume Open Camera runs in landscape mode (if we ever ran in portrait mode,
-            // we'd still want display_size.x > display_size.y as preview resolutions also have width > height)
-            if( display_size.x < display_size.y ) {
-                //noinspection SuspiciousNameCombination
-                display_size.set(display_size.y, display_size.x);
-            }
-            if( MyDebug.LOG )
-                Log.i(TAG, "display_size: " + display_size.x + " x " + display_size.y);
-        }
-        if( camera_preview_sizes == null ) {
-            // camera_preview_sizes is null on Samsung Galaxy Note 10+ and S20 for camera ID 4!
-            Log.e(TAG, "no preview sizes returned by getOutputSizes");
-            throw new CameraControllerException();
-        }
-        else {
-            for(android.util.Size camera_size : camera_preview_sizes) {
-                if( MyDebug.LOG )
-                    Log.i(TAG, "preview size: " + camera_size.getWidth() + " x " + camera_size.getHeight());
-                if( camera_size.getWidth() > display_size.x || camera_size.getHeight() > display_size.y ) {
-                    // Nexus 6 returns these, even though not supported?! (get green corruption lines if we allow these)
-                    // Google Camera filters anything larger than height 1080, with a todo saying to use device's measurements
-                    continue;
-                }
-                camera_features.mSupportedPreviewSizes.add(new CameraController.Size(camera_size.getWidth(), camera_size.getHeight()));
-            }
+            doInitSupportedHighSpeedVideoSizes(camera_features, configs); //high speed video list
         }
 
         if( characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) ) {
@@ -2768,6 +2639,266 @@ public class CameraController2 extends CameraController {
         return camera_features;
     }
 
+    private boolean isVideoSizeSupportedByCamera(StreamConfigurationMap configs,
+                                                 android.util.Size sz,
+                                                 int frameRate) {
+        long minDuration = configs.getOutputMinFrameDuration(MediaRecorder.class, sz);
+        if (minDuration == 0) {
+            return false;
+        }
+
+        int maxFrameRate = (int) (1e9f / minDuration);
+        return maxFrameRate >= frameRate;
+    }
+
+    /**
+     * Check if encoder can support this size and frame rate combination by querying
+     * MediaCodec capability. Check is based on size and frame rate. Ignore the bit rate
+     * as the bit rates targeted in this test are well below the bit rate max value specified
+     * by AVC specification for certain level.
+     */
+    private static boolean isSupportedByAVCEncoder(android.util.Size sz, int frameRate) {
+        MediaFormat format = MediaFormat.createVideoFormat(
+                MediaFormat.MIMETYPE_VIDEO_AVC, sz.getWidth(), sz.getHeight());
+        format.setInteger(MediaFormat.KEY_FRAME_RATE, frameRate);
+        MediaCodecList mcl = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+        return mcl.findEncoderForFormat(format) != null;
+    }
+
+    /**
+     * Check if the encoder and camera are able to support this size and frame rate.
+     * Assume the video compression format is AVC.
+     */
+    private boolean isVideoSizeFpsSupported(StreamConfigurationMap configs,
+                                            android.util.Size sz,
+                                            int captureRate,
+                                            int encodingRate) {
+        // Check camera capability.
+        if (!isVideoSizeSupportedByCamera(configs, sz, captureRate)) {
+            Log.e(TAG, "isVideoSizeFpsSupported camera not support this!!! size:" + sz.toString() +
+                    ", captureRate:" + captureRate);
+            return false;
+        }
+
+        // Check encode capability.
+        if (!isSupportedByAVCEncoder(sz, encodingRate)){
+            Log.e(TAG, "isVideoSizeFpsSupported video not support this!!! size:" + sz.toString() +
+                    ", captureRate:" + captureRate);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void doInitSupportedVideoSizes(CameraFeatures camera_features,
+                                           StreamConfigurationMap configs) throws CameraControllerException {
+        android.util.Size[] camera_video_sizes = configs.getOutputSizes(MediaRecorder.class);
+        camera_features.mSupportedVideoSizes = new ArrayList<>();
+        int min_fps = 9999;
+        for(int[] r : this.mAeFpsRanges) {
+            min_fps = Math.min(min_fps, r[0]);
+        }
+        if( camera_video_sizes == null ) {
+            // camera_video_sizes is null on Samsung Galaxy Note 10+ and S20 for camera ID 4!
+            Log.e(TAG, "no video sizes returned by getOutputSizes");
+            throw new CameraControllerException();
+        }
+        else {
+            for(android.util.Size camera_size : camera_video_sizes) {
+                long mfd = configs.getOutputMinFrameDuration(MediaRecorder.class, camera_size);
+                int  max_fps = (int)((1.0 / mfd) * 1000000000L);
+                if (isVideoSizeFpsSupported(configs, camera_size, max_fps, max_fps)) {
+                    ArrayList<int[]> fr = new ArrayList<>();
+                    fr.add(new int[] {max_fps, max_fps});
+                    CameraController.Size normal_video_size = new CameraController.Size(
+                            camera_size.getWidth(),
+                            camera_size.getHeight(),
+                            fr,
+                            false);
+                    camera_features.mSupportedVideoSizes.add(normal_video_size);
+                    if( MyDebug.LOG ) {
+                        Log.i(TAG, "doInitSupportedVideoSizes normal video size: " + normal_video_size);
+                    }
+                } else {
+                    Log.e(TAG, "doInitSupportedVideoSizes not support!" +
+                            "camera_size:" + camera_size.toString() +
+                            ",max_fps:" + max_fps);
+                }
+            }
+        }
+        Collections.sort(camera_features.mSupportedVideoSizes, new CameraController.SizeSorter());
+    }
+
+    private void doInitSupportedJpegSizes(CameraFeatures camera_features,
+                                          StreamConfigurationMap configs) throws CameraControllerException {
+        android.util.Size [] camera_picture_sizes = configs.getOutputSizes(ImageFormat.JPEG);
+        camera_features.mSupportedPictureSizes = new ArrayList<>();
+        if( android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M ) {
+            android.util.Size [] camera_picture_sizes_hires = configs.getHighResolutionOutputSizes(ImageFormat.JPEG);
+            if( camera_picture_sizes_hires != null ) {
+                for(android.util.Size camera_size_hr : camera_picture_sizes_hires) {
+                    if( MyDebug.LOG )
+                        Log.i(TAG, "high resolution picture size: " + camera_size_hr.getWidth() + " x " + camera_size_hr.getHeight());
+                    // Check not already listed? If it's listed in both, we'll add it later on when scanning camera_picture_sizes
+                    // (and we don't want to set supports_burst to false for such a resolution).
+                    boolean found = false;
+                    for(android.util.Size sz : camera_picture_sizes) {
+                        if( sz.equals(camera_size_hr) ) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if( !found ) {
+                        if( MyDebug.LOG )
+                            Log.i(TAG, "doInitSupportedJpegSizes high resolution [non-burst] picture size: " + camera_size_hr.getWidth() + " x " + camera_size_hr.getHeight());
+                        CameraController.Size size = new CameraController.Size(camera_size_hr.getWidth(),
+                                                                camera_size_hr.getHeight());
+                        size.supports_burst = false;
+                        camera_features.mSupportedPictureSizes.add(size);
+                    }
+                }
+            }
+        }
+        if( camera_picture_sizes == null ) {
+            // camera_picture_sizes is null on Samsung Galaxy Note 10+ and S20 for camera ID 4!
+            Log.e(TAG, "no picture sizes returned by getOutputSizes");
+            throw new CameraControllerException();
+        }
+        else {
+            for(android.util.Size camera_size : camera_picture_sizes) {
+                if( MyDebug.LOG )
+                    Log.i(TAG, "doInitSupportedJpegSizes picture size: " + camera_size.getWidth() + " x " + camera_size.getHeight());
+                camera_features.mSupportedPictureSizes.add(new CameraController.Size(camera_size.getWidth(),
+                                                            camera_size.getHeight()));
+            }
+        }
+        // sizes are usually already sorted from high to low, but sort just in case
+        // note some devices do have sizes in a not fully sorted order (e.g., Nokia 8)
+        Collections.sort(camera_features.mSupportedPictureSizes, new CameraController.SizeSorter());
+        // test high resolution modes not supporting burst:
+        //camera_features.picture_sizes.get(0).supports_burst = false;
+    }
+
+    /**
+     * Get high speed FPS from CamcorderProfiles for a given size.
+     *
+     * @param size The size used to search the CamcorderProfiles for the FPS.
+     * @return high speed video FPS, 0 if the given size is not supported by the CamcorderProfiles.
+     */
+    private int getFpsFromHighSpeedProfileForSize(android.util.Size size) {
+        for (int quality = CamcorderProfile.QUALITY_HIGH_SPEED_LOW;
+             quality <= CamcorderProfile.QUALITY_HIGH_SPEED_2160P; quality++) {
+            if (CamcorderProfile.hasProfile(quality)) {
+                CamcorderProfile profile = CamcorderProfile.get(quality);
+                if (size.equals(new android.util.Size(profile.videoFrameWidth, profile.videoFrameHeight))){
+                    return profile.videoFrameRate;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    private void doInitSupportedHighSpeedVideoSizes(CameraFeatures camera_features,
+                                                    StreamConfigurationMap configs) {
+
+        hs_fps_ranges = new ArrayList<>();
+        camera_features.mSupportedVideoSizesHighSpeed = new ArrayList<>();
+
+        for (Range<Integer> r : configs.getHighSpeedVideoFpsRanges()) {
+            hs_fps_ranges.add(new int[] {r.getLower(), r.getUpper()});
+        }
+        Collections.sort(hs_fps_ranges, new CameraController.RangeSorter());
+        if( MyDebug.LOG ) {
+            Log.i(TAG, "Supported high speed video fps ranges: ");
+            for (int[] f : hs_fps_ranges) {
+                Log.i(TAG, "   hs range: [" + f[0] + "-" + f[1] + "]");
+            }
+        }
+
+
+        android.util.Size[] camera_video_sizes_high_speed = configs.getHighSpeedVideoSizes();
+        for(android.util.Size camera_size : camera_video_sizes_high_speed) {
+            for (Range<Integer> r : configs.getHighSpeedVideoFpsRangesFor(camera_size)) {
+                int profile_fps = getFpsFromHighSpeedProfileForSize(camera_size);
+                if (r.getUpper() > profile_fps) {
+                    Log.e(TAG, "doInitSupportedHighSpeedVideoSizes high speed recording " +
+                            camera_size + "@" + r.getLower() + "fps"
+                            + " is not supported by CamcorderProfile, fps:" + profile_fps);
+                    continue;
+                }
+                ArrayList<int[]> fr = new ArrayList<>();
+                fr.add(new int[] { r.getLower(), r.getUpper()});
+
+                CameraController.Size hs_video_size = new CameraController.Size(
+                        camera_size.getWidth(),
+                        camera_size.getHeight(),
+                        fr,
+                        true);
+                if (MyDebug.LOG) {
+                    Log.i(TAG, "doInitSupportedHighSpeedVideoSizes high speed video size: " +
+                            hs_video_size +
+                            ", fps range:" + r.toString());
+                }
+                camera_features.mSupportedVideoSizesHighSpeed.add(hs_video_size);
+            }
+        }
+        Collections.sort(camera_features.mSupportedVideoSizesHighSpeed, new CameraController.SizeSorter());
+    }
+
+    private void doInitSupportedPreviewSizes(CameraFeatures camera_features,
+                                             StreamConfigurationMap configs) throws CameraControllerException{
+        android.util.Size [] camera_preview_sizes = configs.getOutputSizes(SurfaceTexture.class);
+        camera_features.mSupportedPreviewSizes = new ArrayList<>();
+        Point display_size = new Point();
+        Activity activity = (Activity)context;
+        {
+//            Display display = activity.getWindowManager().getDefaultDisplay();
+            Display display = getDisplay(activity);
+            display.getRealSize(display_size);
+            // getRealSize() is adjusted based on the current rotation, so should already be landscape format, but it
+            // would be good to not assume Open Camera runs in landscape mode (if we ever ran in portrait mode,
+            // we'd still want display_size.x > display_size.y as preview resolutions also have width > height)
+            if( display_size.x < display_size.y ) {
+                //noinspection SuspiciousNameCombination
+                display_size.set(display_size.y, display_size.x);
+            }
+            if( MyDebug.LOG )
+                Log.i(TAG, "display_size: " + display_size.x + " x " + display_size.y);
+        }
+        if( camera_preview_sizes == null ) {
+            // camera_preview_sizes is null on Samsung Galaxy Note 10+ and S20 for camera ID 4!
+            Log.e(TAG, "no preview sizes returned by getOutputSizes");
+            throw new CameraControllerException();
+        }
+        else {
+            for(android.util.Size camera_size : camera_preview_sizes) {
+                if( MyDebug.LOG )
+                    Log.i(TAG, "preview size: " + camera_size.getWidth() + " x " + camera_size.getHeight());
+                if( camera_size.getWidth() > display_size.x || camera_size.getHeight() > display_size.y ) {
+                    // Nexus 6 returns these, even though not supported?! (get green corruption lines if we allow these)
+                    // Google Camera filters anything larger than height 1080, with a todo saying to use device's measurements
+                    continue;
+                }
+                camera_features.mSupportedPreviewSizes.add(new CameraController.Size(camera_size.getWidth(), camera_size.getHeight()));
+            }
+        }
+    }
+
+    private static Display getDisplay(Context context) {
+        WindowManager wm;
+        if (context instanceof Activity) {
+            Activity activity = (Activity) context;
+            wm = activity.getWindowManager();
+        } else {
+            wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        }
+        if (wm != null) {
+            return wm.getDefaultDisplay();
+        }
+        return null;
+    }
+
     public boolean shouldCoverPreview() {
         return !has_received_frame;
     }
@@ -2919,7 +3050,7 @@ public class CameraController2 extends CameraController {
             }
 
             camera_settings.scene_mode = selected_value2;
-            if( camera_settings.setSceneMode(previewBuilder) ) {
+            if( camera_settings.setSceneMode(mPreviewBuilder) ) {
                 try {
                     setRepeatingRequest();
                 }
@@ -2938,9 +3069,9 @@ public class CameraController2 extends CameraController {
     
     @Override
     public String getSceneMode() {
-        if( previewBuilder.get(CaptureRequest.CONTROL_SCENE_MODE) == null )
+        if( mPreviewBuilder.get(CaptureRequest.CONTROL_SCENE_MODE) == null )
             return null;
-        int value2 = previewBuilder.get(CaptureRequest.CONTROL_SCENE_MODE);
+        int value2 = mPreviewBuilder.get(CaptureRequest.CONTROL_SCENE_MODE);
         return convertSceneMode(value2);
     }
 
@@ -3043,7 +3174,7 @@ public class CameraController2 extends CameraController {
             }
 
             camera_settings.color_effect = selected_value2;
-            if( camera_settings.setColorEffect(previewBuilder) ) {
+            if(mPreviewBuilder!=null && camera_settings.setColorEffect(mPreviewBuilder) ) {
                 try {
                     setRepeatingRequest();
                 }
@@ -3062,9 +3193,9 @@ public class CameraController2 extends CameraController {
 
     @Override
     public String getColorEffect() {
-        if( previewBuilder.get(CaptureRequest.CONTROL_EFFECT_MODE) == null )
+        if( mPreviewBuilder.get(CaptureRequest.CONTROL_EFFECT_MODE) == null )
             return null;
-        int value2 = previewBuilder.get(CaptureRequest.CONTROL_EFFECT_MODE);
+        int value2 = mPreviewBuilder.get(CaptureRequest.CONTROL_EFFECT_MODE);
         return convertColorEffect(value2);
     }
 
@@ -3183,7 +3314,7 @@ public class CameraController2 extends CameraController {
             }
 
             camera_settings.white_balance = selected_value2;
-            if( camera_settings.setWhiteBalance(previewBuilder) ) {
+            if( camera_settings.setWhiteBalance(mPreviewBuilder) ) {
                 try {
                     setRepeatingRequest();
                 }
@@ -3202,9 +3333,9 @@ public class CameraController2 extends CameraController {
 
     @Override
     public String getWhiteBalance() {
-        if( previewBuilder.get(CaptureRequest.CONTROL_AWB_MODE) == null )
+        if( mPreviewBuilder.get(CaptureRequest.CONTROL_AWB_MODE) == null )
             return null;
-        int value2 = previewBuilder.get(CaptureRequest.CONTROL_AWB_MODE);
+        int value2 = mPreviewBuilder.get(CaptureRequest.CONTROL_AWB_MODE);
         return convertWhiteBalance(value2);
     }
 
@@ -3222,7 +3353,7 @@ public class CameraController2 extends CameraController {
             temperature = Math.max(temperature, min_white_balance_temperature_c);
             temperature = Math.min(temperature, max_white_balance_temperature_c);
             camera_settings.white_balance_temperature = temperature;
-            if( camera_settings.setWhiteBalance(previewBuilder) ) {
+            if( camera_settings.setWhiteBalance(mPreviewBuilder) ) {
                 setRepeatingRequest();
             }
         }
@@ -3309,7 +3440,7 @@ public class CameraController2 extends CameraController {
 
                 camera_settings.has_antibanding = true;
                 camera_settings.antibanding = selected_value2;
-                if( camera_settings.setAntiBanding(previewBuilder) ) {
+                if( camera_settings.setAntiBanding(mPreviewBuilder) ) {
                     try {
                         setRepeatingRequest();
                     }
@@ -3329,9 +3460,9 @@ public class CameraController2 extends CameraController {
 
     @Override
     public String getAntiBanding() {
-        if( previewBuilder.get(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE) == null )
+        if( mPreviewBuilder.get(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE) == null )
             return null;
-        int value2 = previewBuilder.get(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE);
+        int value2 = mPreviewBuilder.get(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE);
         return convertAntiBanding(value2);
     }
 
@@ -3407,7 +3538,7 @@ public class CameraController2 extends CameraController {
                 if( camera_settings.has_edge_mode != has_edge_mode || camera_settings.edge_mode != selected_value2 ) {
                     camera_settings.has_edge_mode = has_edge_mode;
                     camera_settings.edge_mode = selected_value2;
-                    if( camera_settings.setEdgeMode(previewBuilder) ) {
+                    if( camera_settings.setEdgeMode(mPreviewBuilder) ) {
                         try {
                             setRepeatingRequest();
                         }
@@ -3428,9 +3559,9 @@ public class CameraController2 extends CameraController {
 
     @Override
     public String getEdgeMode() {
-        if( previewBuilder.get(CaptureRequest.EDGE_MODE) == null )
+        if( mPreviewBuilder.get(CaptureRequest.EDGE_MODE) == null )
             return null;
-        int value2 = previewBuilder.get(CaptureRequest.EDGE_MODE);
+        int value2 = mPreviewBuilder.get(CaptureRequest.EDGE_MODE);
         return convertEdgeMode(value2);
     }
 
@@ -3522,7 +3653,7 @@ public class CameraController2 extends CameraController {
                 if( camera_settings.has_noise_reduction_mode != has_noise_reduction_mode || camera_settings.noise_reduction_mode != selected_value2 ) {
                     camera_settings.has_noise_reduction_mode = has_noise_reduction_mode;
                     camera_settings.noise_reduction_mode = selected_value2;
-                    if( camera_settings.setNoiseReductionMode(previewBuilder) ) {
+                    if( camera_settings.setNoiseReductionMode(mPreviewBuilder) ) {
                         try {
                             setRepeatingRequest();
                         }
@@ -3543,9 +3674,9 @@ public class CameraController2 extends CameraController {
 
     @Override
     public String getNoiseReductionMode() {
-        if( previewBuilder.get(CaptureRequest.NOISE_REDUCTION_MODE) == null )
+        if( mPreviewBuilder.get(CaptureRequest.NOISE_REDUCTION_MODE) == null )
             return null;
-        int value2 = previewBuilder.get(CaptureRequest.NOISE_REDUCTION_MODE);
+        int value2 = mPreviewBuilder.get(CaptureRequest.NOISE_REDUCTION_MODE);
         return convertNoiseReductionMode(value2);
     }
 
@@ -3590,7 +3721,7 @@ public class CameraController2 extends CameraController {
             }
             updateUseFakePrecaptureMode(camera_settings.flash_value);
 
-            if( camera_settings.setAEMode(previewBuilder, false) ) {
+            if( camera_settings.setAEMode(mPreviewBuilder, false) ) {
                 setRepeatingRequest();
             }
         }
@@ -3622,7 +3753,7 @@ public class CameraController2 extends CameraController {
         }
         try {
             camera_settings.iso = iso;
-            if( camera_settings.setAEMode(previewBuilder, false) ) {
+            if( camera_settings.setAEMode(mPreviewBuilder, false) ) {
                 setRepeatingRequest();
             }
         }
@@ -3662,7 +3793,7 @@ public class CameraController2 extends CameraController {
         }
         try {
             camera_settings.exposure_time = exposure_time;
-            if( camera_settings.setAEMode(previewBuilder, false) ) {
+            if( camera_settings.setAEMode(mPreviewBuilder, false) ) {
                 setRepeatingRequest();
             }
         }
@@ -3690,7 +3821,7 @@ public class CameraController2 extends CameraController {
         try {
             camera_settings.has_aperture = true;
             camera_settings.aperture = aperture;
-            if( camera_settings.setAperture(previewBuilder) ) {
+            if( camera_settings.setAperture(mPreviewBuilder) ) {
                 setRepeatingRequest();
             }
         }
@@ -3718,7 +3849,7 @@ public class CameraController2 extends CameraController {
                 Log.e(TAG, "no camera");
             return;
         }
-        if( captureSession != null ) {
+        if( mCameraCaptureSession != null ) {
             // can only call this when captureSession not created - as the surface of the imageReader we create has to match the surface we pass to the captureSession
             if( MyDebug.LOG )
                 Log.e(TAG, "can't set picture size when captureSession running!");
@@ -3747,7 +3878,7 @@ public class CameraController2 extends CameraController {
                 Log.e(TAG, "can't set raw when raw not supported");
             return;
         }
-        if( captureSession != null ) {
+        if( mCameraCaptureSession != null ) {
             // can only call this when captureSession not created - as it affects how we create the imageReader
             if( MyDebug.LOG )
                 Log.e(TAG, "can't set raw when captureSession running!");
@@ -3769,7 +3900,7 @@ public class CameraController2 extends CameraController {
         if( this.want_video_high_speed == want_video_high_speed ) {
             return;
         }
-        if( captureSession != null ) {
+        if( mCameraCaptureSession != null ) {
             // can only call this when captureSession not created - as it affects how we create the session
             if( MyDebug.LOG )
                 Log.e(TAG, "can't set high speed when captureSession running!");
@@ -3799,7 +3930,7 @@ public class CameraController2 extends CameraController {
         }*/
         this.burst_type = burst_type;
         updateUseFakePrecaptureMode(camera_settings.flash_value);
-        camera_settings.setAEMode(previewBuilder, false); // may need to set the ae mode, as flash is disabled for burst modes
+        camera_settings.setAEMode(mPreviewBuilder, false); // may need to set the ae mode, as flash is disabled for burst modes
     }
 
     @Override
@@ -3951,7 +4082,7 @@ public class CameraController2 extends CameraController {
     private void createPictureImageReader() {
         if( MyDebug.LOG )
             Log.i(TAG, "createPictureImageReader");
-        if( captureSession != null ) {
+        if( mCameraCaptureSession != null ) {
             // can only call this when captureSession not created - as the surface of the imageReader we create has to match the surface we pass to the captureSession
             if( MyDebug.LOG )
                 Log.e(TAG, "can't create picture image reader when captureSession running!");
@@ -4097,7 +4228,7 @@ public class CameraController2 extends CameraController {
         if( MyDebug.LOG )
             Log.i(TAG, "setVideoStabilization: " + enabled);
         camera_settings.video_stabilization = enabled;
-        camera_settings.setStabilization(previewBuilder);
+        camera_settings.setStabilization(mPreviewBuilder);
         try {
             setRepeatingRequest();
         }
@@ -4113,7 +4244,7 @@ public class CameraController2 extends CameraController {
 
     @Override
     public boolean getOpticalStabilization() {
-        Integer ois_mode = previewBuilder.get(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE);
+        Integer ois_mode = mPreviewBuilder.get(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE);
         if( ois_mode == null )
             return false;
         return( ois_mode == CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON );
@@ -4148,7 +4279,7 @@ public class CameraController2 extends CameraController {
         else
             camera_settings.gamma_profile = 0.0f;
 
-        camera_settings.setTonemapProfile(previewBuilder);
+        camera_settings.setTonemapProfile(mPreviewBuilder);
         try {
             setRepeatingRequest();
         }
@@ -4170,11 +4301,11 @@ public class CameraController2 extends CameraController {
     /** For testing.
      */
     public CaptureRequest.Builder testGetPreviewBuilder() {
-        return previewBuilder;
+        return mPreviewBuilder;
     }
 
     public TonemapCurve testGetTonemapCurve() {
-        return previewBuilder.get(CaptureRequest.TONEMAP_CURVE);
+        return mPreviewBuilder.get(CaptureRequest.TONEMAP_CURVE);
     }
 
     @Override
@@ -4240,7 +4371,7 @@ public class CameraController2 extends CameraController {
             Log.i(TAG, "current_rect bottom: " + current_rect.bottom);*/
         }
         camera_settings.scalar_crop_region = new Rect(left, top, right, bottom);
-        camera_settings.setCropRegion(previewBuilder);
+        camera_settings.setCropRegion(mPreviewBuilder);
         this.current_zoom_value = value;
         try {
             setRepeatingRequest();
@@ -4257,9 +4388,9 @@ public class CameraController2 extends CameraController {
     
     @Override
     public int getExposureCompensation() {
-        if( previewBuilder.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION) == null )
+        if( mPreviewBuilder.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION) == null )
             return 0;
-        return previewBuilder.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION);
+        return mPreviewBuilder.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION);
     }
 
     @Override
@@ -4267,7 +4398,7 @@ public class CameraController2 extends CameraController {
     public boolean setExposureCompensation(int new_exposure) {
         camera_settings.has_ae_exposure_compensation = true;
         camera_settings.ae_exposure_compensation = new_exposure;
-        if( camera_settings.setExposureCompensation(previewBuilder) ) {
+        if( camera_settings.setExposureCompensation(mPreviewBuilder) ) {
             try {
                 setRepeatingRequest();
             }
@@ -4294,7 +4425,7 @@ public class CameraController2 extends CameraController {
                 (long)(1.0 / (min / 1000.0) * 1000000000L);
 
         try {
-            if( camera_settings.setAEMode(previewBuilder, false) ) {
+            if( camera_settings.setAEMode(mPreviewBuilder, false) ) {
                 setRepeatingRequest();
             }
         }
@@ -4323,7 +4454,7 @@ public class CameraController2 extends CameraController {
             // CONTROL_AE_TARGET_FPS_RANGE and SENSOR_FRAME_DURATION
 
             try {
-                if( camera_settings.setAEMode(previewBuilder, false) ) {
+                if( camera_settings.setAEMode(mPreviewBuilder, false) ) {
                     setRepeatingRequest();
                 }
             }
@@ -4342,7 +4473,7 @@ public class CameraController2 extends CameraController {
     public List<int[]> getSupportedPreviewFpsRange() {
         List<int[]> l = new ArrayList<>();
 
-        List<int[]> rr = want_video_high_speed ? hs_fps_ranges : ae_fps_ranges;
+        List<int[]> rr = want_video_high_speed ? hs_fps_ranges : mAeFpsRanges;
         for (int[] r : rr) {
             int[] ir = { r[0] * 1000, r[1] * 1000 };
             l.add( ir );
@@ -4390,8 +4521,8 @@ public class CameraController2 extends CameraController {
         }
         camera_settings.has_af_mode = true;
         camera_settings.af_mode = focus_mode;
-        camera_settings.setFocusMode(previewBuilder);
-        camera_settings.setFocusDistance(previewBuilder); // also need to set distance, in case changed between infinity, manual or other modes
+        camera_settings.setFocusMode(mPreviewBuilder);
+        camera_settings.setFocusDistance(mPreviewBuilder); // also need to set distance, in case changed between infinity, manual or other modes
         //camera_settings.setTonemapProfile(previewBuilder); // testing - if using focus mode to test video profiles, see test_new flag
         try {
             setRepeatingRequest();
@@ -4435,7 +4566,7 @@ public class CameraController2 extends CameraController {
     
     @Override
     public String getFocusValue() {
-        Integer focus_mode = previewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
+        Integer focus_mode = mPreviewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
         if( focus_mode == null )
             focus_mode = CaptureRequest.CONTROL_AF_MODE_AUTO;
         return convertFocusModeToValue(focus_mode);
@@ -4457,7 +4588,7 @@ public class CameraController2 extends CameraController {
         }
         camera_settings.focus_distance = focus_distance;
         camera_settings.focus_distance_manual = focus_distance;
-        camera_settings.setFocusDistance(previewBuilder);
+        camera_settings.setFocusDistance(mPreviewBuilder);
         try {
             setRepeatingRequest();
         }
@@ -4546,12 +4677,12 @@ public class CameraController2 extends CameraController {
             if( camera_settings.flash_value.equals("flash_torch") && !flash_value.equals("flash_off") ) {
                 // hack - if switching to something other than flash_off, we first need to turn torch off, otherwise torch remains on (at least on Nexus 6 and Nokia 8)
                 camera_settings.flash_value = "flash_off";
-                camera_settings.setAEMode(previewBuilder, false);
-                CaptureRequest request = previewBuilder.build();
+                camera_settings.setAEMode(mPreviewBuilder, false);
+                CaptureRequest request = mPreviewBuilder.build();
     
                 // need to wait until torch actually turned off
                 camera_settings.flash_value = flash_value;
-                camera_settings.setAEMode(previewBuilder, false);
+                camera_settings.setAEMode(mPreviewBuilder, false);
                 push_repeating_request_when_torch_off = true;
                 push_repeating_request_when_torch_off_id = request;
     
@@ -4559,7 +4690,7 @@ public class CameraController2 extends CameraController {
             }
             else {
                 camera_settings.flash_value = flash_value;
-                if( camera_settings.setAEMode(previewBuilder, false) ) {
+                if( camera_settings.setAEMode(mPreviewBuilder, false) ) {
                     setRepeatingRequest();
                 }
             }
@@ -4591,7 +4722,7 @@ public class CameraController2 extends CameraController {
     @Override
     public void setAutoExposureLock(boolean enabled) {
         camera_settings.ae_lock = enabled;
-        camera_settings.setAutoExposureLock(previewBuilder);
+        camera_settings.setAutoExposureLock(mPreviewBuilder);
         try {
             setRepeatingRequest();
         }
@@ -4607,15 +4738,15 @@ public class CameraController2 extends CameraController {
     
     @Override
     public boolean getAutoExposureLock() {
-        if( previewBuilder.get(CaptureRequest.CONTROL_AE_LOCK) == null )
+        if( mPreviewBuilder.get(CaptureRequest.CONTROL_AE_LOCK) == null )
             return false;
-        return previewBuilder.get(CaptureRequest.CONTROL_AE_LOCK);
+        return mPreviewBuilder.get(CaptureRequest.CONTROL_AE_LOCK);
     }
 
     @Override
     public void setAutoWhiteBalanceLock(boolean enabled) {
         camera_settings.wb_lock = enabled;
-        camera_settings.setAutoWhiteBalanceLock(previewBuilder);
+        camera_settings.setAutoWhiteBalanceLock(mPreviewBuilder);
         try {
             setRepeatingRequest();
         }
@@ -4631,9 +4762,9 @@ public class CameraController2 extends CameraController {
 
     @Override
     public boolean getAutoWhiteBalanceLock() {
-        if( previewBuilder.get(CaptureRequest.CONTROL_AWB_LOCK) == null )
+        if( mPreviewBuilder.get(CaptureRequest.CONTROL_AWB_LOCK) == null )
             return false;
-        return previewBuilder.get(CaptureRequest.CONTROL_AWB_LOCK);
+        return mPreviewBuilder.get(CaptureRequest.CONTROL_AWB_LOCK);
     }
 
     @Override
@@ -4676,8 +4807,8 @@ public class CameraController2 extends CameraController {
      *  of the full view always). Similarly for the rect field in CameraController.Face.
      */
     private Rect getViewableRect() {
-        if( previewBuilder != null ) {
-            Rect crop_rect = previewBuilder.get(CaptureRequest.SCALER_CROP_REGION);
+        if( mPreviewBuilder != null ) {
+            Rect crop_rect = mPreviewBuilder.get(CaptureRequest.SCALER_CROP_REGION);
             if( crop_rect != null ) {
                 return crop_rect;
             }
@@ -4767,7 +4898,7 @@ public class CameraController2 extends CameraController {
             for(CameraController.Area area : areas) {
                 camera_settings.af_regions[i++] = convertAreaToMeteringRectangle(sensor_rect, area);
             }
-            camera_settings.setAFRegions(previewBuilder);
+            camera_settings.setAFRegions(mPreviewBuilder);
         }
         else
             camera_settings.af_regions = null;
@@ -4778,7 +4909,7 @@ public class CameraController2 extends CameraController {
             for(CameraController.Area area : areas) {
                 camera_settings.ae_regions[i++] = convertAreaToMeteringRectangle(sensor_rect, area);
             }
-            camera_settings.setAERegions(previewBuilder);
+            camera_settings.setAERegions(mPreviewBuilder);
         }
         else
             camera_settings.ae_regions = null;
@@ -4815,7 +4946,7 @@ public class CameraController2 extends CameraController {
                 has_focus = true;
                 camera_settings.af_regions = new MeteringRectangle[1];
                 camera_settings.af_regions[0] = new MeteringRectangle(0, 0, sensor_rect.width()-1, sensor_rect.height()-1, 0);
-                camera_settings.setAFRegions(previewBuilder);
+                camera_settings.setAFRegions(mPreviewBuilder);
             }
             else
                 camera_settings.af_regions = null;
@@ -4823,7 +4954,7 @@ public class CameraController2 extends CameraController {
                 has_metering = true;
                 camera_settings.ae_regions = new MeteringRectangle[1];
                 camera_settings.ae_regions[0] = new MeteringRectangle(0, 0, sensor_rect.width()-1, sensor_rect.height()-1, 0);
-                camera_settings.setAERegions(previewBuilder);
+                camera_settings.setAERegions(mPreviewBuilder);
             }
             else
                 camera_settings.ae_regions = null;
@@ -4855,7 +4986,7 @@ public class CameraController2 extends CameraController {
             // needed to fix failure on Android emulator in testTakePhotoContinuousNoTouch - can happen when CONTROL_MAX_REGIONS_AF > 0, but Camera only has 1 focus mode so Preview doesn't set focus areas
             return null;
         }
-        MeteringRectangle [] metering_rectangles = previewBuilder.get(CaptureRequest.CONTROL_AF_REGIONS);
+        MeteringRectangle [] metering_rectangles = mPreviewBuilder.get(CaptureRequest.CONTROL_AF_REGIONS);
         if( metering_rectangles == null )
             return null;
         Rect sensor_rect = getViewableRect();
@@ -4878,7 +5009,7 @@ public class CameraController2 extends CameraController {
             // needed to fix failure on Android emulator in testTakePhotoContinuousNoTouch - can happen when CONTROL_MAX_REGIONS_AF > 0, but Camera only has 1 focus mode so Preview doesn't set focus areas
             return null;
         }
-        MeteringRectangle [] metering_rectangles = previewBuilder.get(CaptureRequest.CONTROL_AE_REGIONS);
+        MeteringRectangle [] metering_rectangles = mPreviewBuilder.get(CaptureRequest.CONTROL_AE_REGIONS);
         if( metering_rectangles == null )
             return null;
         Rect sensor_rect = getViewableRect();
@@ -4895,9 +5026,9 @@ public class CameraController2 extends CameraController {
 
     @Override
     public boolean supportsAutoFocus() {
-        if( previewBuilder == null )
+        if( mPreviewBuilder == null )
             return false;
-        Integer focus_mode = previewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
+        Integer focus_mode = mPreviewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
         if( focus_mode == null )
             return false;
         if( focus_mode == CaptureRequest.CONTROL_AF_MODE_AUTO || focus_mode == CaptureRequest.CONTROL_AF_MODE_MACRO )
@@ -4907,9 +5038,9 @@ public class CameraController2 extends CameraController {
 
     @Override
     public boolean focusIsContinuous() {
-        if( previewBuilder == null )
+        if( mPreviewBuilder == null )
             return false;
-        Integer focus_mode = previewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
+        Integer focus_mode = mPreviewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
         if( focus_mode == null )
             return false;
         if( focus_mode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE || focus_mode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO )
@@ -4919,9 +5050,9 @@ public class CameraController2 extends CameraController {
 
     @Override
     public boolean focusIsVideo() {
-        if( previewBuilder == null )
+        if( mPreviewBuilder == null )
             return false;
-        Integer focus_mode = previewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
+        Integer focus_mode = mPreviewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
         if( focus_mode == null )
             return false;
         if( focus_mode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO ) {
@@ -4958,26 +5089,26 @@ public class CameraController2 extends CameraController {
     }
 
     private void setRepeatingRequest() throws CameraAccessException {
-        setRepeatingRequest(previewBuilder.build());
+        setRepeatingRequest(mPreviewBuilder.build());
     }
 
     private void setRepeatingRequest(CaptureRequest request) throws CameraAccessException {
         if( MyDebug.LOG )
             Log.i(TAG, "setRepeatingRequest");
         synchronized( background_camera_lock ) {
-            if( mCameraDevice == null || captureSession == null ) {
+            if( mCameraDevice == null || mCameraCaptureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
             }
             try {
                 if( is_video_high_speed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
-                    CameraConstrainedHighSpeedCaptureSession captureSessionHighSpeed = (CameraConstrainedHighSpeedCaptureSession) captureSession;
+                    CameraConstrainedHighSpeedCaptureSession captureSessionHighSpeed = (CameraConstrainedHighSpeedCaptureSession) mCameraCaptureSession;
                     List<CaptureRequest> mPreviewBuilderBurst = captureSessionHighSpeed.createHighSpeedRequestList(request);
                     captureSessionHighSpeed.setRepeatingBurst(mPreviewBuilderBurst, previewCaptureCallback, handler);
                 }
                 else {
-                    captureSession.setRepeatingRequest(request, previewCaptureCallback, handler);
+                    mCameraCaptureSession.setRepeatingRequest(request, previewCaptureCallback, handler);
                 }
                 if( MyDebug.LOG )
                     Log.i(TAG, "setRepeatingRequest done");
@@ -4992,19 +5123,19 @@ public class CameraController2 extends CameraController {
     }
 
     private void capture() throws CameraAccessException {
-        capture(previewBuilder.build());
+        capture(mPreviewBuilder.build());
     }
 
     private void capture(CaptureRequest request) throws CameraAccessException {
         if( MyDebug.LOG )
             Log.i(TAG, "capture");
         synchronized( background_camera_lock ) {
-            if( mCameraDevice == null || captureSession == null ) {
+            if( mCameraDevice == null || mCameraCaptureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
             }
-            captureSession.capture(request, previewCaptureCallback, handler);
+            mCameraCaptureSession.capture(request, previewCaptureCallback, handler);
         }
     }
 
@@ -5017,12 +5148,12 @@ public class CameraController2 extends CameraController {
             return;
         }
         if( MyDebug.LOG )
-            Log.i(TAG, "camera: " + mCameraDevice);
+            Log.i(TAG, "camera: " + mCameraDevice, new Throwable());
         try {
-            previewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             previewIsVideoMode = false;
-            previewBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_PREVIEW);
-            camera_settings.setupBuilder(previewBuilder, false);
+            mPreviewBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_PREVIEW);
+            camera_settings.setupBuilder(mPreviewBuilder, false);
             if( MyDebug.LOG )
                 Log.i(TAG, "successfully created preview request");
         }
@@ -5077,7 +5208,7 @@ public class CameraController2 extends CameraController {
         if( MyDebug.LOG )
             Log.i(TAG, "create capture session");
         
-        if( previewBuilder == null ) {
+        if( mPreviewBuilder == null ) {
             if( MyDebug.LOG )
                 Log.i(TAG, "previewBuilder not present!");
             throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
@@ -5089,11 +5220,11 @@ public class CameraController2 extends CameraController {
         }
 
         synchronized( background_camera_lock ) {
-            if( captureSession != null ) {
+            if( mCameraCaptureSession != null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "close old capture session");
-                captureSession.close();
-                captureSession = null;
+                mCameraCaptureSession.close();
+                mCameraCaptureSession = null;
                 //pending_request_when_ready = null;
             }
         }
@@ -5126,7 +5257,7 @@ public class CameraController2 extends CameraController {
                     if( mPreviewSurface != null ) {
                         if( MyDebug.LOG )
                             Log.i(TAG, "remove old target: " + mPreviewSurface);
-                        previewBuilder.removeTarget(mPreviewSurface);
+                        mPreviewBuilder.removeTarget(mPreviewSurface);
                     }
                     if (mSurfaceTexture != null) {
                         this.mPreviewSurface = new Surface(mSurfaceTexture);
@@ -5165,7 +5296,7 @@ public class CameraController2 extends CameraController {
                 public void onConfigured(@NonNull CameraCaptureSession session) {
                     if( MyDebug.LOG ) {
                         Log.i(TAG, "onConfigured: " + session);
-                        Log.i(TAG, "captureSession was: " + captureSession);
+                        Log.i(TAG, "captureSession was: " + mCameraCaptureSession);
                     }
                     if( mCameraDevice == null ) {
                         if( MyDebug.LOG ) {
@@ -5178,17 +5309,17 @@ public class CameraController2 extends CameraController {
                         return;
                     }
                     synchronized( background_camera_lock ) {
-                        captureSession = session;
+                        mCameraCaptureSession = session;
                         Surface surface = getPreviewSurface();
                         if( MyDebug.LOG ) {
                             Log.i(TAG, "add surface to previewBuilder: " + surface);
                         }
-                        previewBuilder.addTarget(surface);
+                        mPreviewBuilder.addTarget(surface);
                         if( video_recorder != null ) {
                             if( MyDebug.LOG ) {
                                 Log.i(TAG, "add video recorder surface to previewBuilder: " + video_recorder_surface);
                             }
-                            previewBuilder.addTarget(video_recorder_surface);
+                            mPreviewBuilder.addTarget(video_recorder_surface);
                         }
                         try {
                             setRepeatingRequest();
@@ -5202,7 +5333,7 @@ public class CameraController2 extends CameraController {
                             e.printStackTrace();
                             // we indicate that we failed to start the preview by setting captureSession back to null
                             // this will cause a CameraControllerException to be thrown below
-                            captureSession = null;
+                            mCameraCaptureSession = null;
                         }
                     }
                     synchronized( background_camera_lock ) {
@@ -5215,7 +5346,7 @@ public class CameraController2 extends CameraController {
                 public void onConfigureFailed(@NonNull CameraCaptureSession session) {
                     if( MyDebug.LOG ) {
                         Log.i(TAG, "onConfigureFailed: " + session);
-                        Log.i(TAG, "captureSession was: " + captureSession);
+                        Log.i(TAG, "captureSession was: " + mCameraCaptureSession);
                     }
                     synchronized( background_camera_lock ) {
                         callback_done = true;
@@ -5344,10 +5475,10 @@ public class CameraController2 extends CameraController {
                 }
             }
             if( MyDebug.LOG ) {
-                Log.i(TAG, "created captureSession: " + captureSession);
+                Log.i(TAG, "created captureSession: " + mCameraCaptureSession);
             }
             synchronized( background_camera_lock ) {
-                if( captureSession == null ) {
+                if( mCameraCaptureSession == null ) {
                     if( MyDebug.LOG )
                         Log.e(TAG, "failed to create capture session");
                     throw new CameraControllerException();
@@ -5394,7 +5525,7 @@ public class CameraController2 extends CameraController {
         }
 
         synchronized( background_camera_lock ) {
-            if( captureSession != null ) {
+            if( mCameraCaptureSession != null ) {
                 try {
                     setRepeatingRequest();
                 }
@@ -5419,7 +5550,7 @@ public class CameraController2 extends CameraController {
         if( MyDebug.LOG )
             Log.i(TAG, "stopPreview: " + this);
         synchronized( background_camera_lock ) {
-            if( mCameraDevice == null || captureSession == null ) {
+            if( mCameraDevice == null || mCameraCaptureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -5428,7 +5559,7 @@ public class CameraController2 extends CameraController {
                 //pending_request_when_ready = null;
 
                 try {
-                    captureSession.stopRepeating();
+                    mCameraCaptureSession.stopRepeating();
                 }
                 catch(IllegalStateException e) {
                     if( MyDebug.LOG )
@@ -5440,8 +5571,8 @@ public class CameraController2 extends CameraController {
                 // although stopRepeating() alone will pause the preview, seems better to close captureSession altogether - this allows the app to make changes such as changing the picture size
                 if( MyDebug.LOG )
                     Log.i(TAG, "close capture session");
-                captureSession.close();
-                captureSession = null;
+                mCameraCaptureSession.close();
+                mCameraCaptureSession = null;
             }
             catch(CameraAccessException e) {
                 if( MyDebug.LOG ) {
@@ -5456,7 +5587,7 @@ public class CameraController2 extends CameraController {
                 if( MyDebug.LOG )
                     Log.i(TAG, "cancel face detection");
                 camera_settings.has_face_detect_mode = false;
-                camera_settings.setFaceDetectMode(previewBuilder);
+                camera_settings.setFaceDetectMode(mPreviewBuilder);
                 // no need to call setRepeatingRequest(), we're just setting the camera_settings for when we restart the preview
             }
         }
@@ -5466,7 +5597,7 @@ public class CameraController2 extends CameraController {
     public boolean startFaceDetection() {
         if( MyDebug.LOG )
             Log.i(TAG, "startFaceDetection");
-        if( previewBuilder.get(CaptureRequest.STATISTICS_FACE_DETECT_MODE) != null && previewBuilder.get(CaptureRequest.STATISTICS_FACE_DETECT_MODE) != CaptureRequest.STATISTICS_FACE_DETECT_MODE_OFF ) {
+        if( mPreviewBuilder.get(CaptureRequest.STATISTICS_FACE_DETECT_MODE) != null && mPreviewBuilder.get(CaptureRequest.STATISTICS_FACE_DETECT_MODE) != CaptureRequest.STATISTICS_FACE_DETECT_MODE_OFF ) {
             if( MyDebug.LOG )
                 Log.i(TAG, "face detection already enabled");
             return false;
@@ -5487,8 +5618,8 @@ public class CameraController2 extends CameraController {
             Log.e(TAG, "startFaceDetection() called but face detection not available");
             return false;
         }
-        camera_settings.setFaceDetectMode(previewBuilder);
-        camera_settings.setSceneMode(previewBuilder); // also need to set the scene mode
+        camera_settings.setFaceDetectMode(mPreviewBuilder);
+        camera_settings.setSceneMode(mPreviewBuilder); // also need to set the scene mode
         try {
             setRepeatingRequest();
         }
@@ -5545,14 +5676,14 @@ public class CameraController2 extends CameraController {
         AutoFocusCallback push_autofocus_cb = null;
         synchronized( background_camera_lock ) {
             fake_precapture_torch_focus_performed = false;
-            if( mCameraDevice == null || captureSession == null ) {
+            if( mCameraDevice == null || mCameraCaptureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 // should call the callback, so the application isn't left waiting (e.g., when we autofocus before trying to take a photo)
                 cb.onAutoFocus(false);
                 return;
             }
-            Integer focus_mode = previewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
+            Integer focus_mode = mPreviewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
             if( MyDebug.LOG )
                 Log.i(TAG, "focus mode: " + (focus_mode == null ? "null" : focus_mode));
             if( focus_mode == null ) {
@@ -5584,7 +5715,7 @@ public class CameraController2 extends CameraController {
                 this.autofocus_cb = cb;
                 return;
             }*/
-            CaptureRequest.Builder afBuilder = previewBuilder;
+            CaptureRequest.Builder afBuilder = mPreviewBuilder;
             if( MyDebug.LOG ) {
                 {
                     MeteringRectangle [] areas = afBuilder.get(CaptureRequest.CONTROL_AF_REGIONS);
@@ -5691,7 +5822,7 @@ public class CameraController2 extends CameraController {
         if( MyDebug.LOG )
             Log.i(TAG, "cancelAutoFocus");
         synchronized( background_camera_lock ) {
-            if( mCameraDevice == null || captureSession == null ) {
+            if( mCameraDevice == null || mCameraCaptureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -5703,7 +5834,7 @@ public class CameraController2 extends CameraController {
                 return;
             }
 
-            previewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
+            mPreviewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
             // Camera2Basic does a capture then sets a repeating request - do the same here just to be safe
             try {
                 capture();
@@ -5716,7 +5847,7 @@ public class CameraController2 extends CameraController {
                 }
                 e.printStackTrace();
             }
-            previewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
+            mPreviewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
             this.autofocus_cb = null;
             this.capture_follows_autofocus_hint = false;
             state = STATE_NORMAL;
@@ -5827,7 +5958,7 @@ public class CameraController2 extends CameraController {
         ErrorCallback push_take_picture_error_cb = null;
 
         synchronized( background_camera_lock ) {
-            if( mCameraDevice == null || captureSession == null ) {
+            if( mCameraDevice == null || mCameraCaptureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -5897,7 +6028,7 @@ public class CameraController2 extends CameraController {
                     // need to stop preview before capture (as done in Camera2Basic; otherwise we get bugs such as flash remaining on after taking a photo with flash)
                     // but don't do this in video mode - if we're taking photo snapshots while video recording, we don't want to pause video!
                     // update: bug with flash may have been device specific (things are fine with Nokia 8)
-                    captureSession.stopRepeating();
+                    mCameraCaptureSession.stopRepeating();
                 }
             }
             catch(CameraAccessException e) {
@@ -5935,7 +6066,7 @@ public class CameraController2 extends CameraController {
 
         if( ok ) {
             synchronized( background_camera_lock ) {
-                if( mCameraDevice == null || captureSession == null ) {
+                if( mCameraDevice == null || mCameraCaptureSession == null ) {
                     if( MyDebug.LOG )
                         Log.i(TAG, "no camera or capture session");
                     return;
@@ -5961,7 +6092,7 @@ public class CameraController2 extends CameraController {
                     if( MyDebug.LOG )
                         Log.i(TAG, "capture with stillBuilder");
                     //pending_request_when_ready = stillBuilder.build();
-                    captureSession.capture(stillBuilder.build(), previewCaptureCallback, handler);
+                    mCameraCaptureSession.capture(stillBuilder.build(), previewCaptureCallback, handler);
                     //captureSession.capture(stillBuilder.build(), new CameraCaptureSession.CaptureCallback() {
                     //}, handler);
                     playSound(MediaActionSound.SHUTTER_CLICK); // play shutter sound asap, otherwise user has the illusion of being slow to take photos
@@ -6074,7 +6205,7 @@ public class CameraController2 extends CameraController {
         ErrorCallback push_take_picture_error_cb = null;
 
         synchronized( background_camera_lock ) {
-            if( mCameraDevice == null || captureSession == null ) {
+            if( mCameraDevice == null || mCameraCaptureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -6311,7 +6442,7 @@ public class CameraController2 extends CameraController {
                 }
 
                 if( !previewIsVideoMode ) {
-                    captureSession.stopRepeating(); // see note under takePictureAfterPrecapture()
+                    mCameraCaptureSession.stopRepeating(); // see note under takePictureAfterPrecapture()
                 }
             }
             catch(CameraAccessException e) {
@@ -6348,7 +6479,7 @@ public class CameraController2 extends CameraController {
 
         if( ok ) {
             synchronized( background_camera_lock ) {
-                if( mCameraDevice == null || captureSession == null ) {
+                if( mCameraDevice == null || mCameraCaptureSession == null ) {
                     if( MyDebug.LOG )
                         Log.i(TAG, "no camera or capture session");
                     return;
@@ -6358,7 +6489,7 @@ public class CameraController2 extends CameraController {
                     if( use_expo_fast_burst && burst_type == BurstType.BURSTTYPE_EXPO ) { // alway use slow burst for focus bracketing
                         if( MyDebug.LOG )
                             Log.i(TAG, "using fast burst");
-                        int sequenceId = captureSession.captureBurst(requests, previewCaptureCallback, handler);
+                        int sequenceId = mCameraCaptureSession.captureBurst(requests, previewCaptureCallback, handler);
                         if( MyDebug.LOG )
                             Log.i(TAG, "sequenceId: " + sequenceId);
                     }
@@ -6367,7 +6498,7 @@ public class CameraController2 extends CameraController {
                             Log.i(TAG, "using slow burst");
                         slow_burst_capture_requests = requests;
                         slow_burst_start_ms = System.currentTimeMillis();
-                        captureSession.capture(requests.get(0), previewCaptureCallback, handler);
+                        mCameraCaptureSession.capture(requests.get(0), previewCaptureCallback, handler);
                     }
 
                     playSound(MediaActionSound.SHUTTER_CLICK); // play shutter sound asap, otherwise user has the illusion of being slow to take photos
@@ -6420,7 +6551,7 @@ public class CameraController2 extends CameraController {
         ErrorCallback push_take_picture_error_cb = null;
 
         synchronized( background_camera_lock ) {
-            if( mCameraDevice == null || captureSession == null ) {
+            if( mCameraDevice == null || mCameraCaptureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 return;
@@ -6590,7 +6721,7 @@ public class CameraController2 extends CameraController {
 
         if( ok ) {
             synchronized( background_camera_lock ) {
-                if( mCameraDevice == null || captureSession == null ) {
+                if( mCameraDevice == null || mCameraCaptureSession == null ) {
                     if( MyDebug.LOG )
                         Log.i(TAG, "no camera or capture session");
                     return;
@@ -6606,7 +6737,7 @@ public class CameraController2 extends CameraController {
                                 Log.i(TAG, "    last continuous capture");
                         }
                         continuous_burst_requested_last_capture = !continuous_burst_in_progress;
-                        captureSession.capture(continuous_burst_in_progress ? request : last_request, previewCaptureCallback, handler);
+                        mCameraCaptureSession.capture(continuous_burst_in_progress ? request : last_request, previewCaptureCallback, handler);
 
                         if( continuous_burst_in_progress ) {
                             final int continuous_burst_rate_ms = 100;
@@ -6652,7 +6783,7 @@ public class CameraController2 extends CameraController {
                         requests.add(last_request);
                         if( MyDebug.LOG )
                             Log.i(TAG, "captureBurst");
-                        int sequenceId = captureSession.captureBurst(requests, previewCaptureCallback, handler);
+                        int sequenceId = mCameraCaptureSession.captureBurst(requests, previewCaptureCallback, handler);
                         if( MyDebug.LOG )
                             Log.i(TAG, "sequenceId: " + sequenceId);
                     }
@@ -6675,13 +6806,13 @@ public class CameraController2 extends CameraController {
                                 ErrorCallback push_take_picture_error_cb = null;
 
                                 synchronized( background_camera_lock ) {
-                                    if( mCameraDevice == null || captureSession == null ) {
+                                    if( mCameraDevice == null || mCameraCaptureSession == null ) {
                                         if( MyDebug.LOG )
                                             Log.i(TAG, "no camera or capture session");
                                         return;
                                     }
                                     try {
-                                        captureSession.capture(n_remaining == 1 ? last_request_f : request_f, previewCaptureCallback, handler);
+                                        mCameraCaptureSession.capture(n_remaining == 1 ? last_request_f : request_f, previewCaptureCallback, handler);
                                         n_remaining--;
                                         if( MyDebug.LOG )
                                             Log.i(TAG, "takePictureBurst n_remaining: " + n_remaining);
@@ -6773,12 +6904,12 @@ public class CameraController2 extends CameraController {
                 // first set precapture to idle - this is needed, otherwise we hang in state STATE_WAITING_PRECAPTURE_START, because precapture already occurred whilst autofocusing, and it doesn't occur again unless we first set the precapture trigger to idle
                 if( MyDebug.LOG )
                     Log.i(TAG, "capture with precaptureBuilder");
-                captureSession.capture(precaptureBuilder.build(), previewCaptureCallback, handler);
-                captureSession.setRepeatingRequest(precaptureBuilder.build(), previewCaptureCallback, handler);
+                mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, handler);
+                mCameraCaptureSession.setRepeatingRequest(precaptureBuilder.build(), previewCaptureCallback, handler);
 
                 // now set precapture
                 precaptureBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CameraMetadata.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-                captureSession.capture(precaptureBuilder.build(), previewCaptureCallback, handler);
+                mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, handler);
             }
             catch(CameraAccessException e) {
                 if( MyDebug.LOG ) {
@@ -6823,9 +6954,9 @@ public class CameraController2 extends CameraController {
                     if( !camera_settings.has_iso ) {
                         // in auto-mode, need to ensure CONTROL_AE_MODE isn't est to flash auto/on for torch to work
                         // in manual-mode, fine as CONTROL_AE_MODE will be off
-                        previewBuilder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON);
+                        mPreviewBuilder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON);
                     }
-                    previewBuilder.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_TORCH);
+                    mPreviewBuilder.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_TORCH);
                     test_fake_flash_precapture++;
                     fake_precapture_torch_performed = true;
                     break;
@@ -6858,7 +6989,7 @@ public class CameraController2 extends CameraController {
             precapture_state_change_time_ms = System.currentTimeMillis();
             fake_precapture_turn_on_torch_id = null;
             try {
-                CaptureRequest request = previewBuilder.build();
+                CaptureRequest request = mPreviewBuilder.build();
                 if( fake_precapture_torch_performed ) {
                     fake_precapture_turn_on_torch_id = request;
                     if( MyDebug.LOG )
@@ -6959,7 +7090,7 @@ public class CameraController2 extends CameraController {
         boolean call_runPrecapture = false;
 
         synchronized( background_camera_lock ) {
-            if( mCameraDevice == null || captureSession == null ) {
+            if( mCameraDevice == null || mCameraCaptureSession == null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "no camera or capture session");
                 error.onError();
@@ -6991,7 +7122,7 @@ public class CameraController2 extends CameraController {
                     // fake precapture works by turning on torch (or using a "front screen flash"), so we can't use the camera's own decision for flash auto
                     // instead we check the current ISO value
                     boolean auto_flash = camera_settings.flash_value.equals("flash_auto") || camera_settings.flash_value.equals("flash_frontscreen_auto");
-                    Integer flash_mode = previewBuilder.get(CaptureRequest.FLASH_MODE);
+                    Integer flash_mode = mPreviewBuilder.get(CaptureRequest.FLASH_MODE);
                     if( MyDebug.LOG )
                         Log.i(TAG, "flash_mode: " + flash_mode);
                     if( auto_flash && !fireAutoFlash() ) {
@@ -7112,12 +7243,12 @@ public class CameraController2 extends CameraController {
         try {
             if( MyDebug.LOG )
                 Log.i(TAG, "obtain video_recorder surface");
-            previewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+            mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
             if( MyDebug.LOG )
                 Log.i(TAG, "done");
             previewIsVideoMode = true;
-            previewBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_VIDEO_RECORD);
-            camera_settings.setupBuilder(previewBuilder, false);
+            mPreviewBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_VIDEO_RECORD);
+            camera_settings.setupBuilder(mPreviewBuilder, false);
             createCaptureSession(video_recorder, want_photo_video_recording);
         }
         catch(CameraAccessException e) {
@@ -7454,7 +7585,7 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "ready for capture: " + af_state);*/
                 ready_for_capture = true;
                 if( autofocus_cb != null && (!do_af_trigger_for_continuous || use_fake_precapture_mode) && focusIsContinuous() ) {
-                    Integer focus_mode = previewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
+                    Integer focus_mode = mPreviewBuilder.get(CaptureRequest.CONTROL_AF_MODE);
                     if( focus_mode != null && focus_mode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE ) {
                         if( MyDebug.LOG )
                             Log.i(TAG, "call autofocus callback, as continuous mode and not focusing: " + af_state);
@@ -7541,7 +7672,7 @@ public class CameraController2 extends CameraController {
                                 // at least on Nexus 6, we need to turn to flash_off to turn off the torch!
                                 String saved_flash_value = camera_settings.flash_value;
                                 camera_settings.flash_value = "flash_off";
-                                camera_settings.setAEMode(previewBuilder, false);
+                                camera_settings.setAEMode(mPreviewBuilder, false);
                                 try {
                                     capture();
                                 }
@@ -7556,7 +7687,7 @@ public class CameraController2 extends CameraController {
 
                                 // now set the actual (should be flash auto or flash on) mode
                                 camera_settings.flash_value = saved_flash_value;
-                                camera_settings.setAEMode(previewBuilder, false);
+                                camera_settings.setAEMode(mPreviewBuilder, false);
                                 try {
                                     setRepeatingRequest();
                                 }
@@ -7899,8 +8030,8 @@ public class CameraController2 extends CameraController {
         }
 
         private void handleFaceDetection(CaptureResult result) {
-            if( face_detection_listener != null && previewBuilder != null ) {
-                Integer face_detect_mode = previewBuilder.get(CaptureRequest.STATISTICS_FACE_DETECT_MODE);
+            if( face_detection_listener != null && mPreviewBuilder != null ) {
+                Integer face_detect_mode = mPreviewBuilder.get(CaptureRequest.STATISTICS_FACE_DETECT_MODE);
                 if( face_detect_mode != null && face_detect_mode != CaptureRequest.STATISTICS_FACE_DETECT_MODE_OFF ) {
                     Rect sensor_rect = getViewableRect();
                     android.hardware.camera2.params.Face [] camera_faces = result.get(CaptureResult.STATISTICS_FACES);
@@ -7975,8 +8106,8 @@ public class CameraController2 extends CameraController {
             // actual parsing of image data is done in the imageReader's OnImageAvailableListener()
             // need to cancel the autofocus, and restart the preview after taking the photo
             // Camera2Basic does a capture then sets a repeating request - do the same here just to be safe
-            if( previewBuilder != null ) {
-                previewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
+            if( mPreviewBuilder != null ) {
+                mPreviewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
                 if( MyDebug.LOG )
                     Log.i(TAG, "### reset ae mode");
                 String saved_flash_value = camera_settings.flash_value;
@@ -7986,7 +8117,7 @@ public class CameraController2 extends CameraController {
                     camera_settings.flash_value = "flash_off";
                 }
                 // if not using fake precapture, not sure if we need to set the ae mode, but the AE mode is set again in Camera2Basic
-                camera_settings.setAEMode(previewBuilder, false);
+                camera_settings.setAEMode(mPreviewBuilder, false);
                 // n.b., if capture/setRepeatingRequest throw exception, we don't call the take_picture_error_cb.onError() callback, as the photo should have been taken by this point
                 try {
                     capture();
@@ -8002,9 +8133,9 @@ public class CameraController2 extends CameraController {
                 if( use_fake_precapture_mode && fake_precapture_torch_performed ) {
                     // now set up the request to switch to the correct flash value
                     camera_settings.flash_value = saved_flash_value;
-                    camera_settings.setAEMode(previewBuilder, false);
+                    camera_settings.setAEMode(mPreviewBuilder, false);
                 }
-                previewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE); // ensure set back to idle
+                mPreviewBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_IDLE); // ensure set back to idle
                 try {
                     setRepeatingRequest();
                 }
@@ -8020,10 +8151,10 @@ public class CameraController2 extends CameraController {
             }
             fake_precapture_torch_performed = false;
 
-            if( burst_type == BurstType.BURSTTYPE_FOCUS && previewBuilder != null ) { // make sure camera wasn't released in the meantime
+            if( burst_type == BurstType.BURSTTYPE_FOCUS && mPreviewBuilder != null ) { // make sure camera wasn't released in the meantime
                 if( MyDebug.LOG )
                     Log.i(TAG, "focus bracketing complete, reset manual focus");
-                camera_settings.setFocusDistance(previewBuilder);
+                camera_settings.setFocusDistance(mPreviewBuilder);
                 try {
                     setRepeatingRequest();
                 }
@@ -8074,7 +8205,7 @@ public class CameraController2 extends CameraController {
             updateCachedCaptureResult(result);
             handleFaceDetection(result);
 
-            if( push_repeating_request_when_torch_off && push_repeating_request_when_torch_off_id == request && previewBuilder != null ) {
+            if( push_repeating_request_when_torch_off && push_repeating_request_when_torch_off_id == request && mPreviewBuilder != null ) {
                 if( MyDebug.LOG )
                     Log.i(TAG, "received push_repeating_request_when_torch_off");
                 Integer flash_state = result.get(CaptureResult.FLASH_STATE);

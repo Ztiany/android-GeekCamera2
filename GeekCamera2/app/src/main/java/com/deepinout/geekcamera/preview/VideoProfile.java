@@ -28,7 +28,7 @@ public class VideoProfile {
     public int videoSource;
     public int videoCodec;
     public int videoFrameRate;
-    public double videoCaptureRate;
+    public int videoCaptureRate;
     public int videoBitRate;
     public int videoFrameHeight;
     public int videoFrameWidth;
