@@ -31,6 +31,7 @@ import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.DngCreator;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.MeteringRectangle;
+import android.hardware.camera2.params.OutputConfiguration;
 import android.hardware.camera2.params.RggbChannelVector;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.hardware.camera2.params.TonemapCurve;
@@ -69,6 +70,7 @@ public class CameraController2 extends CameraController {
 
     private final Context context;
     private CameraDevice mCameraDevice;
+    private OutputConfiguration mOutputConfiguration;
     private final String cameraIdS;
 
     private final boolean is_samsung;

@@ -3020,8 +3020,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 new_size = new CameraController.Size(profile.videoFrameWidth, profile.videoFrameHeight);
             }
             else {
-                double targetRatio = ((double) profile.videoFrameWidth) / (double) profile.videoFrameHeight;
-                new_size = getOptimalVideoPictureSize(mPhotoSizes, targetRatio);
+//                double targetRatio = ((double) profile.videoFrameWidth) / (double) profile.videoFrameHeight;
+//                new_size = getOptimalVideoPictureSize(mPhotoSizes, targetRatio);
+                new_size = new CameraController.Size(profile.videoFrameWidth, profile.videoFrameHeight);
             }
         }
         else {
@@ -3561,7 +3562,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         final double ASPECT_TOLERANCE = 0.05;
         if( sizes == null )
             return null;
-        if( is_video && video_high_speed ) {
+        if( is_video) {
             VideoProfile profile = getVideoProfile();
             if( MyDebug.LOG )
                 Log.d(TAG, "video size: " + profile.videoFrameWidth + " x " + profile.videoFrameHeight);
