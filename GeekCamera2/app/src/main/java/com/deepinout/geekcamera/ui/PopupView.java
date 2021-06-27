@@ -434,7 +434,7 @@ public class PopupView extends LinearLayout {
                 if( video_sizes.size() == 0 ) {
                     Log.e(TAG, "can't find any supported video sizes for current fps!");
                     // fall back to unfiltered list
-                    video_sizes = preview.getVideoQualityHander().getSupportedVideoQuality();
+                    video_sizes = preview.getVideoQualityHandler().getSupportedVideoQuality();
                 }
                 // take a copy so that we can reorder
                 video_sizes = new ArrayList<>(video_sizes);
@@ -445,7 +445,7 @@ public class PopupView extends LinearLayout {
                 video_size_index = video_sizes.size()-1; // default to largest (just in case current size not found??)
                 for(int i=0;i<video_sizes.size();i++) {
                     String video_size = video_sizes.get(i);
-                    if( video_size.equals(preview.getVideoQualityHander().getCurrentVideoQuality()) ) {
+                    if( video_size.equals(preview.getVideoQualityHandler().getCurrentVideoQuality()) ) {
                         video_size_index = i;
                         break;
                     }

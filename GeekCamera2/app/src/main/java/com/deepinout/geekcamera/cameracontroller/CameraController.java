@@ -109,6 +109,9 @@ public abstract class CameraController {
             if( sizes == null )
                 return false;
             for(Size size : sizes) {
+                if (!size.supported_by_video_quality) {
+                    continue;
+                }
                 if( size.supportsFrameRate(fps) ) {
                     if( MyDebug.LOG )
                         Log.d(TAG, "fps is supported");
@@ -166,6 +169,7 @@ public abstract class CameraController {
         public boolean supports_burst; // for photo
         public final List<int[]> fps_ranges; // for video
         public final boolean high_speed; // for video
+        public boolean supported_by_video_quality;
 
         Size(int width, int height, List<int[]> fps_ranges, boolean high_speed) {
             this.width = width;
@@ -174,6 +178,7 @@ public abstract class CameraController {
             this.fps_ranges = fps_ranges;
             this.high_speed = high_speed;
             Collections.sort(this.fps_ranges, new RangeSorter());
+            supported_by_video_quality = false;
         }
 
         public Size(int width, int height) {

@@ -1,7 +1,6 @@
 package com.deepinout.geekcamera.test;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -7423,10 +7422,10 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
         final int [] fps_values = mPreview.usingCamera2API() ? new int[]{15, 25, 30, 60, 120, 240} : new int[]{30};
         for(int fps_value : fps_values) {
             if( mPreview.usingCamera2API() ) {
-                if( mPreview.getVideoQualityHander().videoSupportsFrameRate(fps_value) ) {
+                if( mPreview.getVideoQualityHandler().videoSupportsFrameRate(fps_value) ) {
                     Log.d(TAG, "fps supported at normal speed: " + fps_value);
                 }
-                else if( mPreview.getVideoQualityHander().videoSupportsFrameRateHighSpeed(fps_value) ) {
+                else if( mPreview.getVideoQualityHandler().videoSupportsFrameRateHighSpeed(fps_value) ) {
                     Log.d(TAG, "fps supported at HIGH SPEED: " + fps_value);
                 }
                 else {
@@ -7474,11 +7473,11 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
         }
 
         int fps_value = 120;
-        if( mPreview.getVideoQualityHander().videoSupportsFrameRate(fps_value) ) {
+        if( mPreview.getVideoQualityHandler().videoSupportsFrameRate(fps_value) ) {
             Log.d(TAG, "fps supported at normal speed: " + fps_value);
             return;
         }
-        else if( !mPreview.getVideoQualityHander().videoSupportsFrameRateHighSpeed(fps_value) ) {
+        else if( !mPreview.getVideoQualityHandler().videoSupportsFrameRateHighSpeed(fps_value) ) {
             Log.d(TAG, "fps is NOT supported: " + fps_value);
             return;
         }
@@ -7527,11 +7526,11 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
         }
 
         int fps_value = 120;
-        if( mPreview.getVideoQualityHander().videoSupportsFrameRate(fps_value) ) {
+        if( mPreview.getVideoQualityHandler().videoSupportsFrameRate(fps_value) ) {
             Log.d(TAG, "fps supported at normal speed: " + fps_value);
             return;
         }
-        else if( !mPreview.getVideoQualityHander().videoSupportsFrameRateHighSpeed(fps_value) ) {
+        else if( !mPreview.getVideoQualityHandler().videoSupportsFrameRateHighSpeed(fps_value) ) {
             Log.d(TAG, "fps is NOT supported: " + fps_value);
             return;
         }
@@ -7569,7 +7568,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
         int video_size_index = -1;
         for(int i=0;i<video_sizes.size();i++) {
             String video_size = video_sizes.get(i);
-            if( video_size.equals(mPreview.getVideoQualityHander().getCurrentVideoQuality()) ) {
+            if( video_size.equals(mPreview.getVideoQualityHandler().getCurrentVideoQuality()) ) {
                 video_size_index = i;
                 break;
             }
@@ -12406,7 +12405,7 @@ public class MainActivityTest extends ActivityInstrumentationTestCase2<MainActiv
 
         setToDefault();
 
-        List<String> video_quality = mActivity.getPreview().getVideoQualityHander().getSupportedVideoQuality();
+        List<String> video_quality = mActivity.getPreview().getVideoQualityHandler().getSupportedVideoQuality();
 
         assertFalse( mActivity.getApplicationInterface().isVideoPref() );
         assertEquals( 0, mActivity.getApplicationInterface().getVideoMaxDurationPref() );

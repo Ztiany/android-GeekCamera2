@@ -2400,7 +2400,6 @@ public class MainActivity extends Activity {
             bundle.putInt("resolution_height", preview.getCurrentPictureSize().height);
         }
 
-        //List<String> video_quality = this.preview.getVideoQualityHander().getSupportedVideoQuality();
         String fps_value = applicationInterface.getVideoFPSPref(); // n.b., this takes into account slow motion mode putting us into a high frame rate
         if( MyDebug.LOG )
             Log.d(TAG, "fps_value: " + fps_value);
@@ -2408,7 +2407,7 @@ public class MainActivity extends Activity {
         if( video_quality == null || video_quality.size() == 0 ) {
             Log.e(TAG, "can't find any supported video sizes for current fps!");
             // fall back to unfiltered list
-            video_quality = this.preview.getVideoQualityHander().getSupportedVideoQuality();
+            video_quality = this.preview.getVideoQualityHandler().getSupportedVideoQuality();
         }
         if( video_quality != null && this.preview.getCameraController() != null ) {
             String [] video_quality_arr = new String[video_quality.size()];
@@ -2430,8 +2429,8 @@ public class MainActivity extends Activity {
             bundle.putString("video_quality_preference_key", video_quality_preference_key);
         }
 
-        if( preview.getVideoQualityHander().getCurrentVideoQuality() != null ) {
-            bundle.putString("current_video_quality", preview.getVideoQualityHander().getCurrentVideoQuality());
+        if( preview.getVideoQualityHandler().getCurrentVideoQuality() != null ) {
+            bundle.putString("current_video_quality", preview.getVideoQualityHandler().getCurrentVideoQuality());
         }
         VideoProfile camcorder_profile = preview.getVideoProfile();
         bundle.putInt("video_frame_width", camcorder_profile.videoFrameWidth);
@@ -2442,7 +2441,7 @@ public class MainActivity extends Activity {
         bundle.putBoolean("video_high_speed", preview.isVideoHighSpeed());
         bundle.putFloat("video_capture_rate_factor", applicationInterface.getVideoCaptureRateFactor());
 
-        List<CameraController.Size> video_sizes = this.preview.getVideoQualityHander().getSupportedVideoSizes();
+        List<CameraController.Size> video_sizes = this.preview.getVideoQualityHandler().getSupportedVideoSizes();
         if( video_sizes != null ) {
             int [] widths = new int[video_sizes.size()];
             int [] heights = new int[video_sizes.size()];
@@ -2467,7 +2466,7 @@ public class MainActivity extends Activity {
                     video_fps.add(fps);
                     video_fps_high_speed.add(true);
                 }
-                else if( this.preview.getVideoQualityHander().videoSupportsFrameRate(fps) ) {
+                else if( this.preview.getVideoQualityHandler().videoSupportsFrameRate(fps) ) {
                     video_fps.add(fps);
                     video_fps_high_speed.add(false);
                 }
@@ -4420,8 +4419,8 @@ public class MainActivity extends Activity {
                 Log.d(TAG, "using Camera2 API, so can disable the force 4K option");
             this.disableForceVideo4K();
         }
-        if( this.supportsForceVideo4K() && preview.getVideoQualityHander().getSupportedVideoSizes() != null ) {
-            for(CameraController.Size size : preview.getVideoQualityHander().getSupportedVideoSizes()) {
+        if( this.supportsForceVideo4K() && preview.getVideoQualityHandler().getSupportedVideoSizes() != null ) {
+            for(CameraController.Size size : preview.getVideoQualityHandler().getSupportedVideoSizes()) {
                 if( size.width >= 3840 && size.height >= 2160 ) {
                     if( MyDebug.LOG )
                         Log.d(TAG, "camera natively supports 4K, so can disable the force option");

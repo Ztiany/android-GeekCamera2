@@ -12,7 +12,7 @@ import com.deepinout.geekcamera.MyDebug;
      *  to be passed to MediaRecorder, but allows us to store additional fields.
      */
 public class VideoProfile {
-    private static final String TAG = "VideoProfile";
+    private static final String TAG = "GC2_VideoProfile";
 
     public boolean record_audio;
     public boolean no_audio_permission; // set to true if record_audio==false, but where the user had requested audio and we don't have microphone permission
@@ -80,7 +80,7 @@ public class VideoProfile {
      */
     public void copyToMediaRecorder(MediaRecorder media_recorder) {
         if( MyDebug.LOG )
-            Log.d(TAG, "copyToMediaRecorder: " + media_recorder);
+            Log.d(TAG, "copyToMediaRecorder: " + media_recorder + toString());
         if( record_audio ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "record audio");

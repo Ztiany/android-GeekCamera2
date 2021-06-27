@@ -700,7 +700,7 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "flash_value: " + flash_value);
                 }
                 if( ae_target_fps_range != null ) {
-                    Log.i(TAG, "set ae_target_fps_range: " + ae_target_fps_range);
+                    Log.d(TAG, "set ae_target_fps_range: " + ae_target_fps_range, new Throwable());
                     builder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, ae_target_fps_range);
                 }
 
@@ -2707,7 +2707,23 @@ public class CameraController2 extends CameraController {
             for(android.util.Size camera_size : camera_video_sizes) {
                 long mfd = configs.getOutputMinFrameDuration(MediaRecorder.class, camera_size);
                 int  max_fps = (int)((1.0 / mfd) * 1000000000L);
-                if (isVideoSizeFpsSupported(configs, camera_size, max_fps, max_fps)) {
+//                if (max_fps > 30) {
+//                    if (isSupportedByAVCEncoder(camera_size, 30)) {
+//                        ArrayList<int[]> fr = new ArrayList<>();
+//                        fr.add(new int[] {30, 30});
+//                        CameraController.Size normal_video_size = new CameraController.Size(
+//                                camera_size.getWidth(),
+//                                camera_size.getHeight(),
+//                                fr,
+//                                false);
+//                        camera_features.mSupportedVideoSizes.add(normal_video_size);
+//                        if( MyDebug.LOG ) {
+//                            Log.i(TAG, "doInitSupportedVideoSizes normal video size: " + normal_video_size +
+//                                    ",max fps:30");
+//                        }
+//                    }
+//                }
+                if (isSupportedByAVCEncoder(camera_size, max_fps)) {
                     ArrayList<int[]> fr = new ArrayList<>();
                     fr.add(new int[] {max_fps, max_fps});
                     CameraController.Size normal_video_size = new CameraController.Size(
@@ -2717,7 +2733,8 @@ public class CameraController2 extends CameraController {
                             false);
                     camera_features.mSupportedVideoSizes.add(normal_video_size);
                     if( MyDebug.LOG ) {
-                        Log.i(TAG, "doInitSupportedVideoSizes normal video size: " + normal_video_size);
+                        Log.i(TAG, "doInitSupportedVideoSizes normal video size: " + normal_video_size +
+                                    ",max fps:" + max_fps);
                     }
                 } else {
                     Log.e(TAG, "doInitSupportedVideoSizes not support!" +
@@ -2821,7 +2838,11 @@ public class CameraController2 extends CameraController {
         for(android.util.Size camera_size : camera_video_sizes_high_speed) {
             for (Range<Integer> r : configs.getHighSpeedVideoFpsRangesFor(camera_size)) {
                 int profile_fps = getFpsFromHighSpeedProfileForSize(camera_size);
-                if (r.getUpper() > profile_fps) {
+                if (r.getUpper() > r.getLower()) {
+                    Log.e(TAG, "doInitSupportedHighSpeedVideoSizes fps range:" + r.toString());
+                    continue;
+                }
+                if (!isSupportedByAVCEncoder(camera_size, r.getUpper())) {
                     Log.e(TAG, "doInitSupportedHighSpeedVideoSizes high speed recording " +
                             camera_size + "@" + r.getLower() + "fps"
                             + " is not supported by CamcorderProfile, fps:" + profile_fps);
@@ -5220,12 +5241,17 @@ public class CameraController2 extends CameraController {
         }
 
         synchronized( background_camera_lock ) {
-            if( mCameraCaptureSession != null ) {
-                if( MyDebug.LOG )
-                    Log.i(TAG, "close old capture session");
-                mCameraCaptureSession.close();
-                mCameraCaptureSession = null;
-                //pending_request_when_ready = null;
+            try {
+                if( mCameraCaptureSession != null ) {
+                    if( MyDebug.LOG )
+                        Log.i(TAG, "close old capture session");
+                    mCameraCaptureSession.abortCaptures();
+                    mCameraCaptureSession.close();
+                    mCameraCaptureSession = null;
+                    //pending_request_when_ready = null;
+                }
+            } catch (Throwable e) {
+
             }
         }
 

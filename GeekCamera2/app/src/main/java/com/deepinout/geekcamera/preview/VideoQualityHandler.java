@@ -1,6 +1,5 @@
 package com.deepinout.geekcamera.preview;
 
-import android.media.CamcorderProfile;
 import android.util.Log;
 
 import com.deepinout.geekcamera.cameracontroller.CameraController;
@@ -40,13 +39,13 @@ public class VideoQualityHandler {
     // video_quality can either be:
     // - an int, in which case it refers to a CamcorderProfile
     // - of the form [CamcorderProfile]_r[width]x[height] - we use the CamcorderProfile as a base, and override the video resolution - this is needed to support resolutions which don't have corresponding camcorder profiles
-    private List<String> video_quality;
+    private List<String> mVideoQualities;
     private int current_video_quality = -1; // this is an index into the video_quality array, or -1 if not found (though this shouldn't happen?)
     private List<CameraController.Size> mCameraSupportedVideoSizesNormal;
     private List<CameraController.Size> mCameraSupportedVideoSizesHighSpeed; // may be null if high speed not supported
 
     void resetCurrentQuality() {
-        video_quality = null;
+        mVideoQualities = new ArrayList<>();
         current_video_quality = -1;
     }
 
@@ -57,14 +56,20 @@ public class VideoQualityHandler {
      * @param profile_dimensions A corresponding list of the width/height for that quality (as given by
      *                   videoFrameWidth, videoFrameHeight in the profile returned by CamcorderProfile.get()).
      */
-    public void initialiseVideoQualityFromProfiles(List<Integer> profiles, List<Dimension2D> profile_dimensions) {
+    public void initialiseVideoQualityFromProfiles(List<Integer> profiles,
+                                                   List<Dimension2D> profile_dimensions,
+                                                   boolean is_high_speed,
+                                                   boolean isApi2) {
         if( MyDebug.LOG )
-            Log.d(TAG, "initialiseVideoQualityFromProfiles()");
-        video_quality = new ArrayList<>();
+            Log.d(TAG, "initialiseVideoQualityFromProfiles is_high_speed:" + is_high_speed);
+        List<CameraController.Size> supported_video_sizes = mCameraSupportedVideoSizesNormal;
+        if (is_high_speed) {
+            supported_video_sizes = mCameraSupportedVideoSizesHighSpeed;
+        }
         boolean[] done_video_size = null;
-        if( mCameraSupportedVideoSizesNormal != null ) {
-            done_video_size = new boolean[mCameraSupportedVideoSizesNormal.size()];
-            for(int i = 0; i< mCameraSupportedVideoSizesNormal.size(); i++)
+        if( supported_video_sizes != null ) {
+            done_video_size = new boolean[supported_video_sizes.size()];
+            for(int i = 0; i< supported_video_sizes.size(); i++)
                 done_video_size[i] = false;
         }
         if( profiles.size() != profile_dimensions.size() ) {
@@ -72,11 +77,15 @@ public class VideoQualityHandler {
             throw new RuntimeException(); // this is a programming error
         }
         for(int i = 0; i < profiles.size(); i++) {
-            addVideoResolutions(done_video_size, profiles.get(i), profile_dimensions.get(i));
+            addVideoResolutions(done_video_size,
+                    profiles.get(i),
+                    profile_dimensions.get(i),
+                    is_high_speed,
+                    isApi2);
         }
         if( MyDebug.LOG ) {
-            for(int i=0;i<video_quality.size();i++) {
-                Log.d(TAG, "supported video quality: " + video_quality.get(i));
+            for(int i = 0; i< mVideoQualities.size(); i++) {
+                Log.d(TAG, "supported video quality: " + mVideoQualities.get(i));
             }
         }
     }
@@ -97,51 +106,96 @@ public class VideoQualityHandler {
         Collections.sort(this.mCameraSupportedVideoSizesNormal, new SortVideoSizesComparator());
         if( MyDebug.LOG ) {
             for(CameraController.Size size : mCameraSupportedVideoSizesNormal) {
-                Log.d(TAG, "    supported video size: " + size.width + ", " + size.height);
+                Log.d(TAG, "    supported video size: " + size.width + ", " + size.height + ", fps:" +
+                        ((size.fps_ranges.size() > 0? size.fps_ranges.get(0)[1] + "": "")));
             }
         }
     }
 
     private void addVideoResolutions(boolean[] done_video_size,
                                      int base_profile,
-                                     Dimension2D dimension2D) {
-        if( mCameraSupportedVideoSizesNormal == null ) {
+                                     Dimension2D dimension2D,
+                                     boolean is_high_speed,
+                                     boolean isApi2) {
+        List<CameraController.Size> supported_video_sizes = mCameraSupportedVideoSizesNormal;
+        if (is_high_speed) {
+            supported_video_sizes = mCameraSupportedVideoSizesHighSpeed;
+        }
+        if( supported_video_sizes == null ) {
             return;
         }
         if( MyDebug.LOG )
-            Log.d(TAG, "profile " + base_profile + " is resolution " +
+            Log.d(TAG, "addVideoResolutions++++++ profile " + base_profile + " is resolution " +
                     dimension2D.width + " x " + dimension2D.height);
-        for(int i = 0; i < mCameraSupportedVideoSizesNormal.size(); i++) {
+        for(int i = 0; i < supported_video_sizes.size(); i++) {
             if( done_video_size[i] )
                 continue;
-            CameraController.Size camera_video_size = mCameraSupportedVideoSizesNormal.get(i);
-            if(camera_video_size.width == dimension2D.width &&
-               camera_video_size.height == dimension2D.height ) {
-                String str = "" + base_profile;
-                video_quality.add(str);
-                done_video_size[i] = true;
-                if( MyDebug.LOG )
-                    Log.d(TAG, "added: " + i + ":"+ str + " " +
-                            camera_video_size.width + "x" + camera_video_size.height +
-                            ",fps:" + dimension2D.videoFrameRate);
+            CameraController.Size camera_video_size = supported_video_sizes.get(i);
+            String camera_fps_range = "null";
+            String str = "" + base_profile;
+            int camera_fps = 0;
+            if (camera_video_size.fps_ranges.size() > 0) {
+                camera_fps = camera_video_size.fps_ranges.get(0)[1];
+                camera_fps_range = "" + camera_video_size.fps_ranges.get(0)[1];
+//                camera_video_size.fps_ranges.get(0)[1] = dimension2D.videoFrameRate;
             }
-            else if(camera_video_size.width * camera_video_size.height >=
-                    dimension2D.width * dimension2D.height &&
-                    camera_video_size.fps_ranges.size() > 0 &&
-                    dimension2D.videoFrameRate == camera_video_size.fps_ranges.get(0)[1]) {
-                String str = "" + base_profile + "_r" + camera_video_size.width + "x" + camera_video_size.height;
-                video_quality.add(str);
-                done_video_size[i] = true;
-                if( MyDebug.LOG )
-                    Log.d(TAG, "added: " + i + ":" + str + ",fps:" + dimension2D.videoFrameRate);
+            if (!isApi2) {
+                if(camera_video_size.width == dimension2D.width &&
+                        camera_video_size.height == dimension2D.height) {
+                    mVideoQualities.add(str);
+                    camera_video_size.supported_by_video_quality = true;
+                    done_video_size[i] = true;
+                    if( MyDebug.LOG ) {
+                        Log.d(TAG, "addVideoResolutions added: " + i + ":"+ str + " " +
+                                camera_video_size.width + "x" + camera_video_size.height +
+                                ",profile fps:" + dimension2D.videoFrameRate +
+                                ",camera fps ranges:" + camera_fps_range);
+                    }
+                }
+            } else {
+                if(camera_video_size.width == dimension2D.width &&
+                        camera_video_size.height == dimension2D.height &&
+                        (dimension2D.videoFrameRate == camera_fps)) {
+                    mVideoQualities.add(str);
+                    camera_video_size.supported_by_video_quality = true;
+                    done_video_size[i] = true;
+                    if( MyDebug.LOG ) {
+                        Log.d(TAG, "addVideoResolutions added: " + i + ":"+ str + " " +
+                                camera_video_size.width + "x" + camera_video_size.height +
+                                ",profile fps:" + dimension2D.videoFrameRate +
+                                ",camera fps ranges:" + camera_fps_range);
+                    }
+                }
+                else {
+                    if( MyDebug.LOG ) {
+                        Log.e(TAG, "addVideoResolutions not added: " + i + ":"+ str + " " +
+                                camera_video_size.width + "x" + camera_video_size.height +
+                                ",profile fps:" + dimension2D.videoFrameRate +
+                                ",profile width:" + dimension2D.width +
+                                ",profile height:" + dimension2D.height +
+                                ",camera fps ranges:" + camera_fps);
+                    }
+                }
+//            else if(camera_video_size.width * camera_video_size.height >=
+//                    dimension2D.width * dimension2D.height &&
+//                    camera_video_size.fps_ranges.size() > 0 &&
+//                    dimension2D.videoFrameRate == camera_video_size.fps_ranges.get(0)[1]) {
+//                String str = "" + base_profile + "_r" + camera_video_size.width + "x" + camera_video_size.height;
+//                video_quality.add(str);
+//                done_video_size[i] = true;
+//                if( MyDebug.LOG )
+//                    Log.d(TAG, "added: " + i + ":" + str + ",fps:" + dimension2D.videoFrameRate);
+//            }
             }
         }
+        if( MyDebug.LOG )
+            Log.d(TAG, "addVideoResolutions-----");
     }
 
     public List<String> getSupportedVideoQuality() {
         if( MyDebug.LOG )
             Log.d(TAG, "getSupportedVideoQuality");
-        return this.video_quality;
+        return this.mVideoQualities;
     }
 
     int getCurrentVideoQualityIndex() {
@@ -159,7 +213,7 @@ public class VideoQualityHandler {
     public String getCurrentVideoQuality() {
         if( current_video_quality == -1 )
             return null;
-        return video_quality.get(current_video_quality);
+        return mVideoQualities.get(current_video_quality);
     }
 
     public List<CameraController.Size> getSupportedVideoSizes() {
@@ -189,18 +243,26 @@ public class VideoQualityHandler {
 
     CameraController.Size findVideoSizeForFrameRate(int width, int height, int fps) {
         if( MyDebug.LOG ) {
-            Log.d(TAG, "findVideoSizeForFrameRate");
-            Log.d(TAG, "width: " + width);
-            Log.d(TAG, "height: " + height);
-            Log.d(TAG, "fps: " + fps);
+            Log.d(TAG, "findVideoSizeForFrameRate++++++");
+            Log.d(TAG, "findVideoSizeForFrameRate width: " + width);
+            Log.d(TAG, "findVideoSizeForFrameRate height: " + height);
+            Log.d(TAG, "findVideoSizeForFrameRate fps: " + fps);
         }
         CameraController.Size requested_size = new CameraController.Size(width, height);
-        CameraController.Size best_video_size = CameraController.CameraFeatures.findSize(this.getSupportedVideoSizes(), requested_size, fps, false);
+        CameraController.Size best_video_size = CameraController.CameraFeatures.findSize(
+                this.getSupportedVideoSizes(),
+                requested_size,
+                fps,
+                false);
         if( best_video_size == null && this.getSupportedVideoSizesHighSpeed() != null ) {
             if( MyDebug.LOG )
-                Log.d(TAG, "need to check high speed sizes");
+                Log.d(TAG, "need to check high speed sizes fps:" + fps);
             // check high speed
-            best_video_size = CameraController.CameraFeatures.findSize(this.getSupportedVideoSizesHighSpeed(), requested_size, fps, false);
+            best_video_size = CameraController.CameraFeatures.findSize(
+                    this.getSupportedVideoSizesHighSpeed(),
+                    requested_size,
+                    fps,
+                    false);
         }
         return best_video_size;
     }

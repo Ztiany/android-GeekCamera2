@@ -647,7 +647,7 @@ public class MyApplicationInterface extends BasicApplicationInterface {
                 if( MyDebug.LOG )
                     Log.d(TAG, "intent_quality: " + intent_quality);
                 if( intent_quality == 0 || intent_quality == 1 ) {
-                    List<String> video_quality = main_activity.getPreview().getVideoQualityHander().getSupportedVideoQuality();
+                    List<String> video_quality = main_activity.getPreview().getVideoQualityHandler().getSupportedVideoQuality();
                     if( intent_quality == 0 ) {
                         if( MyDebug.LOG )
                             Log.d(TAG, "return lowest quality");
@@ -712,8 +712,8 @@ public class MyApplicationInterface extends BasicApplicationInterface {
             int preferred_fps = (int)(30.0/capture_rate_factor+0.5);
             if( MyDebug.LOG )
                 Log.d(TAG, "preferred_fps: " + preferred_fps);
-            if( main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRateHighSpeed(preferred_fps) ||
-                    main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRate(preferred_fps) )
+            if( main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRateHighSpeed(preferred_fps) ||
+                    main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRate(preferred_fps) )
                 return "" + preferred_fps;
             // just in case say we support 120fps but NOT 60fps, getSupportedSlowMotionRates() will have returned that 2x slow
             // motion is supported, but we need to set 120fps instead of 60fps
@@ -721,8 +721,8 @@ public class MyApplicationInterface extends BasicApplicationInterface {
                 preferred_fps *= 2;
                 if( MyDebug.LOG )
                     Log.d(TAG, "preferred_fps not supported, try: " + preferred_fps);
-                if( main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRateHighSpeed(preferred_fps) ||
-                        main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRate(preferred_fps) )
+                if( main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRateHighSpeed(preferred_fps) ||
+                        main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRate(preferred_fps) )
                     return "" + preferred_fps;
             }
             // shouln't happen based on getSupportedSlowMotionRates()
@@ -769,19 +769,19 @@ public class MyApplicationInterface extends BasicApplicationInterface {
             // We consider a slow motion rate supported if we can get at least 30fps in slow motion.
             // If this code is updated, see if we also need to update how slow motion fps is chosen
             // in getVideoFPSPref().
-            if( main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRateHighSpeed(240) ||
-                    main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRate(240) ) {
+            if( main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRateHighSpeed(240) ||
+                    main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRate(240) ) {
                 rates.add(1.0f/8.0f);
                 rates.add(1.0f/4.0f);
                 rates.add(1.0f/2.0f);
             }
-            else if( main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRateHighSpeed(120) ||
-                    main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRate(120) ) {
+            else if( main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRateHighSpeed(120) ||
+                    main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRate(120) ) {
                 rates.add(1.0f/4.0f);
                 rates.add(1.0f/2.0f);
             }
-            else if( main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRateHighSpeed(60) ||
-                    main_activity.getPreview().getVideoQualityHander().videoSupportsFrameRate(60) ) {
+            else if( main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRateHighSpeed(60) ||
+                    main_activity.getPreview().getVideoQualityHandler().videoSupportsFrameRate(60) ) {
                 rates.add(1.0f/2.0f);
             }
         }

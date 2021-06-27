@@ -312,7 +312,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     private float capture_rate_factor = 1.0f; // should be 1.0f if has_capture_rate_factor is false; set lower than 1 for slow motion, higher than 1 for timelapse
     private boolean video_high_speed; // whether the current video mode requires high speed frame rate (note this may still be true even if is_video==false, so potentially we could switch photo/video modes without setting up the flag)
     private boolean mSupportsVideoHighSpeed;
-    private final VideoQualityHandler video_quality_handler = new VideoQualityHandler();
+    private final VideoQualityHandler mVideoQualityHandler = new VideoQualityHandler();
 
     private Toast last_toast;
     private long last_toast_time_ms;
@@ -402,8 +402,6 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     public volatile boolean test_runtime_on_video_stop; // force throwing a RuntimeException when stopping video (this usually happens naturally when stopping video too soon)
     public volatile boolean test_burst_resolution;
     private static final int[] mCamcorderProfileList = {
-            CamcorderProfile.QUALITY_LOW,
-            CamcorderProfile.QUALITY_HIGH,
             CamcorderProfile.QUALITY_QCIF,
             CamcorderProfile.QUALITY_CIF,
             CamcorderProfile.QUALITY_480P,
@@ -411,6 +409,12 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             CamcorderProfile.QUALITY_1080P,
             CamcorderProfile.QUALITY_QVGA,
             CamcorderProfile.QUALITY_2160P
+    };
+    private static final int[] mCamcorderProfileListHighSpeed = {
+            CamcorderProfile.QUALITY_HIGH_SPEED_480P,
+            CamcorderProfile.QUALITY_HIGH_SPEED_720P,
+            CamcorderProfile.QUALITY_HIGH_SPEED_1080P,
+            CamcorderProfile.QUALITY_HIGH_SPEED_2160P
     };
     
     public Preview(ApplicationInterface applicationInterface, ViewGroup parent) {
@@ -1451,7 +1455,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         video_high_speed = false;
         supports_video = true;
         mSupportsVideoHighSpeed = false;
-        video_quality_handler.resetCurrentQuality();
+        mVideoQualityHandler.resetCurrentQuality();
         supported_flash_values = null;
         current_flash_index = -1;
         supported_focus_values = null;
@@ -2148,8 +2152,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             this.view_angle_x = camera_features.view_angle_x;
             this.view_angle_y = camera_features.view_angle_y;
             this.mSupportsVideoHighSpeed = camera_features.mSupportedVideoSizesHighSpeed != null && camera_features.mSupportedVideoSizesHighSpeed.size() > 0;
-            this.video_quality_handler.setVideoSizes(camera_features.mSupportedVideoSizes);
-            this.video_quality_handler.setVideoSizesHighSpeed(camera_features.mSupportedVideoSizesHighSpeed);
+            this.mVideoQualityHandler.setVideoSizes(camera_features.mSupportedVideoSizes);
+            this.mVideoQualityHandler.setVideoSizesHighSpeed(camera_features.mSupportedVideoSizesHighSpeed);
             this.mSupportedPreviewSizes = camera_features.mSupportedPreviewSizes;
             this.supported_capabilitys = camera_features.supported_capabilitys;
         }
@@ -2741,42 +2745,42 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         String video_quality_value_s = applicationInterface.getVideoQualityPref();
         if( MyDebug.LOG )
             Log.d(TAG, "video_quality_value: " + video_quality_value_s);
-        video_quality_handler.setCurrentVideoQualityIndex(-1);
+        mVideoQualityHandler.setCurrentVideoQualityIndex(-1);
         if( video_quality_value_s.length() > 0 ) {
             // parse the saved video quality, and make sure it is still valid
             // now find value in valid list
-            for(int i=0;i<video_quality_handler.getSupportedVideoQuality().size() && video_quality_handler.getCurrentVideoQualityIndex()==-1;i++) {
-                if( video_quality_handler.getSupportedVideoQuality().get(i).equals(video_quality_value_s) ) {
-                    video_quality_handler.setCurrentVideoQualityIndex(i);
+            for(int i = 0; i< mVideoQualityHandler.getSupportedVideoQuality().size() && mVideoQualityHandler.getCurrentVideoQualityIndex()==-1; i++) {
+                if( mVideoQualityHandler.getSupportedVideoQuality().get(i).equals(video_quality_value_s) ) {
+                    mVideoQualityHandler.setCurrentVideoQualityIndex(i);
                     if( MyDebug.LOG )
-                        Log.d(TAG, "set current_video_quality to: " + video_quality_handler.getCurrentVideoQualityIndex());
+                        Log.d(TAG, "set current_video_quality to: " + mVideoQualityHandler.getCurrentVideoQualityIndex());
                 }
             }
-            if( video_quality_handler.getCurrentVideoQualityIndex() == -1 ) {
+            if( mVideoQualityHandler.getCurrentVideoQualityIndex() == -1 ) {
                 if( MyDebug.LOG )
                     Log.e(TAG, "failed to find valid video_quality");
             }
         }
-        if( video_quality_handler.getCurrentVideoQualityIndex() == -1 && video_quality_handler.getSupportedVideoQuality().size() > 0 ) {
+        if( mVideoQualityHandler.getCurrentVideoQualityIndex() == -1 && mVideoQualityHandler.getSupportedVideoQuality().size() > 0 ) {
             // default to FullHD if available, else pick highest quality
             // (FullHD will give smaller file sizes and generally give better performance than 4K so probably better for most users; also seems to suffer from less problems when using manual ISO in Camera2 API)
-            video_quality_handler.setCurrentVideoQualityIndex(0); // start with highest quality
-            for(int i=0;i<video_quality_handler.getSupportedVideoQuality().size();i++) {
+            mVideoQualityHandler.setCurrentVideoQualityIndex(0); // start with highest quality
+            for(int i = 0; i< mVideoQualityHandler.getSupportedVideoQuality().size(); i++) {
                 if( MyDebug.LOG )
-                    Log.d(TAG, "check video quality: " + video_quality_handler.getSupportedVideoQuality().get(i));
-                CamcorderProfile profile = getCamcorderProfile(video_quality_handler.getSupportedVideoQuality().get(i));
+                    Log.d(TAG, "check video quality: " + mVideoQualityHandler.getSupportedVideoQuality().get(i));
+                CamcorderProfile profile = getCamcorderProfile(mVideoQualityHandler.getSupportedVideoQuality().get(i));
                 if( profile.videoFrameWidth == 1920 && profile.videoFrameHeight == 1080 ) {
-                    video_quality_handler.setCurrentVideoQualityIndex(i);
+                    mVideoQualityHandler.setCurrentVideoQualityIndex(i);
                     break;
                 }
             }
             if( MyDebug.LOG )
-                Log.d(TAG, "set video_quality value to " + video_quality_handler.getCurrentVideoQuality());
+                Log.d(TAG, "set video_quality value to " + mVideoQualityHandler.getCurrentVideoQuality());
         }
 
-        if( video_quality_handler.getCurrentVideoQualityIndex() != -1 ) {
+        if( mVideoQualityHandler.getCurrentVideoQualityIndex() != -1 ) {
             // now save, so it's available for PreferenceActivity
-            applicationInterface.setVideoQualityPref(video_quality_handler.getCurrentVideoQuality());
+            applicationInterface.setVideoQualityPref(mVideoQualityHandler.getCurrentVideoQuality());
         }
         else {
             // This means video_quality_handler.getSupportedVideoQuality().size() is 0 - this could happen if the camera driver
@@ -2804,35 +2808,35 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 VideoProfile profile = getVideoProfile();
                 if( MyDebug.LOG )
                     Log.d(TAG, "check if we need high speed video for " + profile.videoFrameWidth + " x " + profile.videoFrameHeight + " at fps " + profile.videoCaptureRate);
-                CameraController.Size best_video_size = video_quality_handler.findVideoSizeForFrameRate(profile.videoFrameWidth, profile.videoFrameHeight, profile.videoCaptureRate);
+                CameraController.Size best_video_size = mVideoQualityHandler.findVideoSizeForFrameRate(profile.videoFrameWidth, profile.videoFrameHeight, profile.videoCaptureRate);
 
-                if( best_video_size == null && video_quality_handler.getSupportedVideoSizesHighSpeed() != null ) {
+                if( best_video_size == null && mVideoQualityHandler.getSupportedVideoSizesHighSpeed() != null ) {
                     Log.e(TAG, "can't find match for capture rate: " + profile.videoCaptureRate + " and video size: " + profile.videoFrameWidth + " x " + profile.videoFrameHeight + " at fps " + profile.videoCaptureRate);
                     // try falling back to one of the supported high speed resolutions
-                    CameraController.Size requested_size = video_quality_handler.getMaxSupportedVideoSizeHighSpeed();
+                    CameraController.Size requested_size = mVideoQualityHandler.getMaxSupportedVideoSizeHighSpeed();
                     profile.videoFrameWidth = requested_size.width;
                     profile.videoFrameHeight = requested_size.height;
                     // now try again
-                    best_video_size = CameraController.CameraFeatures.findSize(video_quality_handler.getSupportedVideoSizesHighSpeed(), requested_size, profile.videoCaptureRate, false);
+                    best_video_size = CameraController.CameraFeatures.findSize(mVideoQualityHandler.getSupportedVideoSizesHighSpeed(), requested_size, profile.videoCaptureRate, false);
                     if( best_video_size != null ) {
                         if( MyDebug.LOG )
                             Log.d(TAG, "fall back to a supported video size for high speed fps");
                         // need to write back to the application
                         // so find the corresponding quality value
-                        video_quality_handler.setCurrentVideoQualityIndex(-1);
-                        for(int i=0;i<video_quality_handler.getSupportedVideoQuality().size();i++) {
+                        mVideoQualityHandler.setCurrentVideoQualityIndex(-1);
+                        for(int i = 0; i< mVideoQualityHandler.getSupportedVideoQuality().size(); i++) {
                             if( MyDebug.LOG )
-                                Log.d(TAG, "check video quality: " + video_quality_handler.getSupportedVideoQuality().get(i));
-                            CamcorderProfile camcorder_profile = getCamcorderProfile(video_quality_handler.getSupportedVideoQuality().get(i));
+                                Log.d(TAG, "check video quality: " + mVideoQualityHandler.getSupportedVideoQuality().get(i));
+                            CamcorderProfile camcorder_profile = getCamcorderProfile(mVideoQualityHandler.getSupportedVideoQuality().get(i));
                             if( camcorder_profile.videoFrameWidth == profile.videoFrameWidth && camcorder_profile.videoFrameHeight == profile.videoFrameHeight ) {
-                                video_quality_handler.setCurrentVideoQualityIndex(i);
+                                mVideoQualityHandler.setCurrentVideoQualityIndex(i);
                                 break;
                             }
                         }
-                        if( video_quality_handler.getCurrentVideoQualityIndex() != -1 ) {
+                        if( mVideoQualityHandler.getCurrentVideoQualityIndex() != -1 ) {
                             if( MyDebug.LOG )
-                                Log.d(TAG, "reset to video quality: " + video_quality_handler.getCurrentVideoQuality());
-                            applicationInterface.setVideoQualityPref(video_quality_handler.getCurrentVideoQuality());
+                                Log.d(TAG, "reset to video quality: " + mVideoQualityHandler.getCurrentVideoQuality());
+                            applicationInterface.setVideoQualityPref(mVideoQualityHandler.getCurrentVideoQuality());
                         }
                         else {
                             if( MyDebug.LOG )
@@ -3043,7 +3047,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 Log.d(TAG, "camera not opened!");
             return;
         }
-        this.video_quality_handler.sortVideoSizes();
+        this.mVideoQualityHandler.sortVideoSizes();
     }
 
     private void initializeVideoQuality() {
@@ -3059,64 +3063,26 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                         profile.videoFrameHeight, profile.videoFrameRate));
             }
         }
+        this.mVideoQualityHandler.initialiseVideoQualityFromProfiles(profiles,
+                dimensions,
+                false,
+                using_android_l);
 
-//        if( CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_HIGH) ) {
-//            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_HIGH);
-//            profiles.add(CamcorderProfile.QUALITY_HIGH);
-//            dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
-//                    profile.videoFrameHeight, profile.videoFrameRate));
-//        }
-//        if( Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP ) {
-//            if( CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_2160P) ) {
-//                CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_2160P);
-//                profiles.add(CamcorderProfile.QUALITY_2160P);
-//                dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
-//                        profile.videoFrameHeight, profile.videoFrameRate));
-//            }
-//        }
-//        if( CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_1080P) ) {
-//            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_1080P);
-//            profiles.add(CamcorderProfile.QUALITY_1080P);
-//            dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
-//                    profile.videoFrameHeight, profile.videoFrameRate));
-//        }
-//        if( CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_720P) ) {
-//            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_720P);
-//            profiles.add(CamcorderProfile.QUALITY_720P);
-//            dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
-//                    profile.videoFrameHeight, profile.videoFrameRate));
-//        }
-//        if( CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_480P) ) {
-//            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_480P);
-//            profiles.add(CamcorderProfile.QUALITY_480P);
-//            dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
-//                    profile.videoFrameHeight, profile.videoFrameRate));
-//        }
-//        if( CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_CIF) ) {
-//            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_CIF);
-//            profiles.add(CamcorderProfile.QUALITY_CIF);
-//            dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
-//                    profile.videoFrameHeight, profile.videoFrameRate));
-//        }
-//        if( CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_QVGA) ) {
-//            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_QVGA);
-//            profiles.add(CamcorderProfile.QUALITY_QVGA);
-//            dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
-//                    profile.videoFrameHeight, profile.videoFrameRate));
-//        }
-//        if( CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_QCIF) ) {
-//            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_QCIF);
-//            profiles.add(CamcorderProfile.QUALITY_QCIF);
-//            dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
-//                    profile.videoFrameHeight, profile.videoFrameRate));
-//        }
-//        if( CamcorderProfile.hasProfile(cameraId, CamcorderProfile.QUALITY_LOW) ) {
-//            CamcorderProfile profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_LOW);
-//            profiles.add(CamcorderProfile.QUALITY_LOW);
-//            dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
-//                    profile.videoFrameHeight, profile.videoFrameRate));
-//        }
-        this.video_quality_handler.initialiseVideoQualityFromProfiles(profiles, dimensions);
+        profiles.clear();
+        dimensions.clear();
+
+        for (int profileId : mCamcorderProfileListHighSpeed) {
+            if( CamcorderProfile.hasProfile(cameraId, profileId) ) {
+                CamcorderProfile profile = CamcorderProfile.get(cameraId, profileId);
+                profiles.add(profileId);
+                dimensions.add(new VideoQualityHandler.Dimension2D(profile.videoFrameWidth,
+                        profile.videoFrameHeight, profile.videoFrameRate));
+            }
+        }
+        this.mVideoQualityHandler.initialiseVideoQualityFromProfiles(profiles,
+                dimensions,
+                true,
+                using_android_l);
     }
 
     /** Gets a CamcorderProfile associated with the supplied quality, for non-slow motion modes. Note
@@ -3229,8 +3195,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 cam_profile.videoFrameHeight = 2160;
                 cam_profile.videoBitRate = (int)(cam_profile.videoBitRate*2.8); // need a higher bitrate for the better quality - this is roughly based on the bitrate used by an S5's native camera app at 4K (47.6 Mbps, compared to 16.9 Mbps which is what's returned by the QUALITY_HIGH profile)
             }
-            else if( this.video_quality_handler.getCurrentVideoQualityIndex() != -1 ) {
-                cam_profile = getCamcorderProfile(this.video_quality_handler.getCurrentVideoQuality());
+            else if( this.mVideoQualityHandler.getCurrentVideoQualityIndex() != -1 ) {
+                cam_profile = getCamcorderProfile(this.mVideoQualityHandler.getCurrentVideoQuality());
             }
             else {
                 cam_profile = null;
@@ -3511,12 +3477,19 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     }
 
     public String getCamcorderProfileDescription(String quality) {
+        if (MyDebug.LOG) {
+            Log.i(TAG, "getCamcorderProfileDescription quality:" + quality);
+        }
         if( mCameraController == null )
             return "";
         CamcorderProfile profile = getCamcorderProfile(quality);
         String type = getCamcorderProfileDescriptionType(profile);
         String space = type.length() == 0 ? "" : " ";
-        return type + space + profile.videoFrameWidth + "x" + profile.videoFrameHeight + " " + getAspectRatioMPString(getResources(), profile.videoFrameWidth, profile.videoFrameHeight, true);
+        return type + space + profile.videoFrameWidth + "x" + profile.videoFrameHeight + "@" +
+                profile.videoFrameRate + "fps " +
+                getAspectRatioMPString(getResources(),
+                        profile.videoFrameWidth,
+                        profile.videoFrameHeight, true);
     }
 
     public double getTargetRatio() {
@@ -3648,7 +3621,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     public CameraController.Size getOptimalVideoPictureSize(List<CameraController.Size> sizes, double targetRatio) {
         if( MyDebug.LOG )
             Log.d(TAG, "getOptimalVideoPictureSize()");
-        CameraController.Size max_video_size = video_quality_handler.getMaxSupportedVideoSize();
+        CameraController.Size max_video_size = mVideoQualityHandler.getMaxSupportedVideoSize();
         return getOptimalVideoPictureSize(sizes, targetRatio, max_video_size);
     }
 
@@ -4234,7 +4207,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         int selected_min_fps = -1, selected_max_fps = -1, selected_diff = -1;
         for(int [] fps_range : fps_ranges) {
             if( MyDebug.LOG ) {
-                Log.d(TAG, "    supported fps range: " + fps_range[0] + " to " + fps_range[1]);
+                Log.d(TAG, "matchPreviewFpsToVideo    supported fps range: " + fps_range[0] + " to " + fps_range[1]);
             }
             int min_fps = fps_range[0];
             int max_fps = fps_range[1];
@@ -4249,7 +4222,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         }
         if( selected_min_fps != -1 ) {
             if( MyDebug.LOG ) {
-                Log.d(TAG, "    chosen fps range: " + selected_min_fps + " to " + selected_max_fps);
+                Log.d(TAG, "matchPreviewFpsToVideo    chosen fps range: " + selected_min_fps + " to " + selected_max_fps);
             }
         }
         else {
@@ -4265,7 +4238,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 else
                     dist = min_fps - video_frame_rate;
                 if( MyDebug.LOG ) {
-                    Log.d(TAG, "    supported fps range: " + min_fps + " to " + max_fps + " has dist " + dist + " and diff " + diff);
+                    Log.d(TAG, "matchPreviewFpsToVideo    supported fps range: " + min_fps + " to " + max_fps + " has dist " + dist + " and diff " + diff);
                 }
                 if( selected_dist == -1 || dist < selected_dist || ( dist == selected_dist && diff < selected_diff ) ) {
                     selected_min_fps = min_fps;
@@ -4275,7 +4248,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 }
             }
             if( MyDebug.LOG )
-                Log.e(TAG, "    can't find match for fps range, so choose closest: " + selected_min_fps + " to " + selected_max_fps);
+                Log.e(TAG, "matchPreviewFpsToVideo    can't find match for fps range, so choose closest: " + selected_min_fps + " to " + selected_max_fps);
         }
         return new int[]{selected_min_fps, selected_max_fps};
     }
@@ -4370,8 +4343,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 Log.d(TAG, "fps_value: " + fps_value);
             }
             if( fps_value.equals("default") && using_android_l ) {
-                if( MyDebug.LOG )
-                    Log.d(TAG, "don't set preview fps for camera2 and default fps video");
+                selected_fps = matchPreviewFpsToVideo(fps_ranges, (int)(profile.videoCaptureRate*1000));
             }
             else if( fps_value.equals("default") && preview_too_dark ) {
                 selected_fps = chooseBestPreviewFps(fps_ranges);
@@ -5430,9 +5402,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         else {
             videoFileInfo = info;
             if( MyDebug.LOG ) {
-                Log.d(TAG, "current_video_quality: " + this.video_quality_handler.getCurrentVideoQualityIndex());
-                if (this.video_quality_handler.getCurrentVideoQualityIndex() != -1)
-                    Log.d(TAG, "current_video_quality value: " + this.video_quality_handler.getCurrentVideoQuality());
+                Log.d(TAG, "current_video_quality: " + this.mVideoQualityHandler.getCurrentVideoQualityIndex());
+                if (this.mVideoQualityHandler.getCurrentVideoQualityIndex() != -1)
+                    Log.d(TAG, "current_video_quality value: " + this.mVideoQualityHandler.getCurrentVideoQuality());
                 Log.d(TAG, "resolution " + profile.videoFrameWidth + " x " + profile.videoFrameHeight);
                 Log.d(TAG, "bit rate " + profile.videoBitRate);
             }
@@ -7150,8 +7122,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         return mPhotoSizes.get(current_size_index);
     }
 
-    public VideoQualityHandler getVideoQualityHander() {
-        return this.video_quality_handler;
+    public VideoQualityHandler getVideoQualityHandler() {
+        return this.mVideoQualityHandler;
     }
 
     /** Returns the supported video "qualities", but unlike
@@ -7161,32 +7133,37 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
      *                  frame rate.
      */
     public List<String> getSupportedVideoQuality(String fps_value) {
-        if( MyDebug.LOG )
-            Log.d(TAG, "getSupportedVideoQuality: " + fps_value);
-        if( !fps_value.equals("default") && mSupportsVideoHighSpeed) {
+        if(MyDebug.LOG)
+            Log.d(TAG, "getSupportedVideoQuality+++ fps: " + fps_value);
+        if(!fps_value.equals("default")) {
             try {
                 int fps = Integer.parseInt(fps_value);
-                if( MyDebug.LOG )
-                    Log.d(TAG, "fps: " + fps);
                 List<String> filtered_video_quality = new ArrayList<>();
-                for(String quality : video_quality_handler.getSupportedVideoQuality()) {
+                for(String quality : mVideoQualityHandler.getSupportedVideoQuality()) {
                     if( MyDebug.LOG )
-                        Log.d(TAG, "quality: " + quality);
+                        Log.d(TAG, "getSupportedVideoQuality quality: " + quality + " fps:" + fps);
                     CamcorderProfile profile = getCamcorderProfile(quality);
                     if( MyDebug.LOG ) {
-                        Log.d(TAG, "    width: " + profile.videoFrameWidth);
-                        Log.d(TAG, "    height: " + profile.videoFrameHeight);
+                        Log.d(TAG, "getSupportedVideoQuality    width: " + profile.videoFrameWidth);
+                        Log.d(TAG, "getSupportedVideoQuality    height: " + profile.videoFrameHeight);
                     }
-                    CameraController.Size best_video_size = video_quality_handler.findVideoSizeForFrameRate(profile.videoFrameWidth, profile.videoFrameHeight, fps);
-                    if( best_video_size != null ) {
+//                    CameraController.Size best_video_size =
+//                            video_quality_handler.findVideoSizeForFrameRate(profile.videoFrameWidth,
+//                                    profile.videoFrameHeight,
+//                                    fps);
+                    if (profile.videoFrameRate == fps) {
                         if( MyDebug.LOG )
-                            Log.d(TAG, "    requested frame rate is supported");
+                            Log.d(TAG, "getSupportedVideoQuality    requested frame rate is supported" +
+                                ", quality:" + quality + ", fps:" + fps);
                         filtered_video_quality.add(quality);
                     }
                     else {
                         if( MyDebug.LOG )
-                            Log.d(TAG, "    requested frame rate is NOT supported");
+                            Log.d(TAG, "getSupportedVideoQuality    requested frame rate is NOT supported");
                     }
+                }
+                if(MyDebug.LOG) {
+                    Log.i(TAG, "getSupportedVideoQuality ----");
                 }
                 return filtered_video_quality;
             }
@@ -7195,7 +7172,10 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                     Log.d(TAG, "fps invalid format, can't parse to int: " + fps_value);
             }
         }
-        return video_quality_handler.getSupportedVideoQuality();
+        if(MyDebug.LOG) {
+            Log.i(TAG, "getSupportedVideoQuality all quality----");
+        }
+        return mVideoQualityHandler.getSupportedVideoQuality();
     }
 
     /** Returns whether the user's fps preference is both non-default, and is considered a
@@ -7212,12 +7192,12 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 if( MyDebug.LOG )
                     Log.d(TAG, "fps: " + fps);
                 // need to check both, e.g., 30fps on Nokia 8 is in fps ranges of both normal and high speed video sizes
-                if( video_quality_handler.videoSupportsFrameRate(fps) ) {
+                if( mVideoQualityHandler.videoSupportsFrameRate(fps) ) {
                     if( MyDebug.LOG )
                         Log.d(TAG, "fps is normal");
                     return false;
                 }
-                else if( video_quality_handler.videoSupportsFrameRateHighSpeed(fps) ) {
+                else if( mVideoQualityHandler.videoSupportsFrameRateHighSpeed(fps) ) {
                     if( MyDebug.LOG )
                         Log.d(TAG, "fps is high speed");
                     return true;
