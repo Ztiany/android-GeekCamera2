@@ -6,10 +6,10 @@ android {
     buildToolsVersion '30.0.3'
     defaultConfig {
         applicationId "com.deepinout.geekcamera"
-        minSdkVersion 15
+        minSdkVersion 28
         targetSdkVersion 29
 
-        renderscriptTargetApi 21
+        renderscriptTargetApi 24
         //renderscriptSupportModeEnabled true // don't use support library as it bloats the APK, and we don't need pre-4.4 support
         // need build tools at least 20 at least to support ScriptIntrinsicHistogram
         // also need build tools at least 21 to avoid Google Play 64-bit warning (required from 1 August 2019)

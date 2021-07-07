@@ -166,6 +166,8 @@ public class CameraController2 extends CameraController {
     private final Object background_camera_lock = new Object(); // lock to synchronize between UI thread and the background "CameraBackground" thread/handler
 
     private ImageReader imageReader;
+    private OutputConfiguration mPreviewOutputConfiguration;
+    private ImageReader mPreviewImageReader;
 
     private BurstType burst_type = BurstType.BURSTTYPE_NONE;
     // for BURSTTYPE_EXPO:
@@ -219,7 +221,7 @@ public class CameraController2 extends CameraController {
     private SurfaceHolder mSurfaceHolder;
     private Surface mPreviewSurface;
     private HandlerThread thread;
-    private Handler handler;
+    private Handler mCameraBackgroundHandler;
     private Surface video_recorder_surface;
 
     private int mPreviewWidth;
@@ -273,6 +275,8 @@ public class CameraController2 extends CameraController {
     private float capture_result_focus_distance_min;
     private float capture_result_focus_distance_max;*/
     private final static long max_preview_exposure_time_c = 1000000000L/12;
+
+    private boolean mEnablePreviewShareSurface = true;
     
     private enum RequestTagType {
         CAPTURE, // request is either for a regular non-burst capture, or the last of a burst capture sequence
@@ -1265,6 +1269,18 @@ public class CameraController2 extends CameraController {
         return temperature;
     }
 
+    private class PreviewOnImageAvailableListener implements ImageReader.OnImageAvailableListener {
+        @Override
+        public void onImageAvailable(ImageReader reader) {
+            Image image = reader.acquireNextImage();
+            if( MyDebug.LOG )
+                Log.i(TAG, "new preview image available w:" + image.getWidth() +
+                            ", h:" + image.getHeight() +
+                            ", format:" + image.getFormat());
+            image.close();
+        }
+    }
+
     private class OnImageAvailableListener implements ImageReader.OnImageAvailableListener {
         @Override
         public void onImageAvailable(ImageReader reader) {
@@ -1389,7 +1405,7 @@ public class CameraController2 extends CameraController {
                     if( burst_type != BurstType.BURSTTYPE_FOCUS ) {
                         try {
                             if( mCameraDevice != null && mCameraCaptureSession != null ) { // make sure camera wasn't released in the meantime
-                                mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, handler);
+                                mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, mCameraBackgroundHandler);
                             }
                         }
                         catch(CameraAccessException e) {
@@ -1466,7 +1482,7 @@ public class CameraController2 extends CameraController {
                             picture_cb = null;
                             push_take_picture_error_cb = take_picture_error_cb;
                         }
-                        handler.postDelayed(new Runnable(){
+                        mCameraBackgroundHandler.postDelayed(new Runnable(){
                             @Override
                             public void run(){
                                 if( MyDebug.LOG )
@@ -1476,7 +1492,7 @@ public class CameraController2 extends CameraController {
                                         if( MyDebug.LOG ) {
                                             Log.i(TAG, "...but wait for next focus bracket, as image queue would block");
                                         }
-                                        handler.postDelayed(this, 100);
+                                        mCameraBackgroundHandler.postDelayed(this, 100);
                                         //throw new RuntimeException(); // test
                                     }
                                     else {
@@ -1486,7 +1502,7 @@ public class CameraController2 extends CameraController {
 
                                         playSound(MediaActionSound.SHUTTER_CLICK);
                                         try {
-                                            mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, handler);
+                                            mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, mCameraBackgroundHandler);
                                         }
                                         catch(CameraAccessException e) {
                                             if( MyDebug.LOG ) {
@@ -1773,7 +1789,7 @@ public class CameraController2 extends CameraController {
 
         thread = new HandlerThread("CameraBackground"); 
         thread.start(); 
-        handler = new Handler(thread.getLooper());
+        mCameraBackgroundHandler = new Handler(thread.getLooper());
 
         final CameraManager manager = (CameraManager)context.getSystemService(Context.CAMERA_SERVICE);
 
@@ -1918,7 +1934,7 @@ public class CameraController2 extends CameraController {
             this.cameraIdS = manager.getCameraIdList()[cameraId];
             if(MyDebug.LOG)
                 Log.i(TAG, "about to open camera: " + cameraIdS, new Throwable());
-            manager.openCamera(cameraIdS, myStateCallback, handler);
+            manager.openCamera(cameraIdS, myStateCallback, mCameraBackgroundHandler);
             if(MyDebug.LOG)
                 Log.i(TAG, "open camera request complete");
         } catch(CameraAccessException e) {
@@ -1970,7 +1986,7 @@ public class CameraController2 extends CameraController {
         }
 
         // set up a timeout - sometimes if the camera has got in a state where it can't be opened until after a reboot, we'll never even get a myStateCallback callback called
-        handler.postDelayed(new Runnable() {
+        mCameraBackgroundHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 if( MyDebug.LOG )
@@ -2076,7 +2092,7 @@ public class CameraController2 extends CameraController {
             try {
                 thread.join();
                 thread = null;
-                handler = null;
+                mCameraBackgroundHandler = null;
             }
             catch(InterruptedException e) {
                 e.printStackTrace();
@@ -2151,6 +2167,15 @@ public class CameraController2 extends CameraController {
                 Log.i(TAG, "out point[" + i + "]: " + point.first + " , " + point.second);*/
         }
         return out_values;
+    }
+
+    private void closePreviewImageReader() {
+        if( MyDebug.LOG )
+            Log.i(TAG, "closePreviewImageReader()");
+        if( mPreviewImageReader != null ) {
+            mPreviewImageReader.close();
+            mPreviewImageReader = null;
+        }
     }
 
     private void closePictureImageReader() {
@@ -4102,6 +4127,29 @@ public class CameraController2 extends CameraController {
         return this.use_fake_precapture;
     }
 
+    private void createPreviewImageReader() {
+        if( MyDebug.LOG )
+            Log.i(TAG, "createPreviewImageReader");
+        if( mCameraCaptureSession != null ) {
+            // can only call this when captureSession not created - as the surface of the imageReader we create has to match the surface we pass to the captureSession
+            if( MyDebug.LOG )
+                Log.e(TAG, "can't create preview image reader when captureSession running!");
+            throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
+        }
+        closePreviewImageReader();
+        if( mPreviewWidth == 0 || mPreviewHeight == 0 ) {
+            if( MyDebug.LOG )
+                Log.e(TAG, "application needs to call setPreviewSize()");
+            throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
+        }
+        mPreviewImageReader = ImageReader.newInstance(mPreviewWidth, mPreviewHeight, ImageFormat.PRIVATE, 2);
+        if( MyDebug.LOG ) {
+            Log.i(TAG, "created new mPreviewImageReader: " + mPreviewImageReader.toString());
+            Log.i(TAG, "mPreviewImageReader surface: " + mPreviewImageReader.getSurface().toString());
+        }
+        mPreviewImageReader.setOnImageAvailableListener(new PreviewOnImageAvailableListener(), mCameraBackgroundHandler);
+    }
+
     private void createPictureImageReader() {
         if( MyDebug.LOG )
             Log.i(TAG, "createPictureImageReader");
@@ -5128,10 +5176,10 @@ public class CameraController2 extends CameraController {
                 if( is_video_high_speed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
                     CameraConstrainedHighSpeedCaptureSession captureSessionHighSpeed = (CameraConstrainedHighSpeedCaptureSession) mCameraCaptureSession;
                     List<CaptureRequest> mPreviewBuilderBurst = captureSessionHighSpeed.createHighSpeedRequestList(request);
-                    captureSessionHighSpeed.setRepeatingBurst(mPreviewBuilderBurst, previewCaptureCallback, handler);
+                    captureSessionHighSpeed.setRepeatingBurst(mPreviewBuilderBurst, previewCaptureCallback, mCameraBackgroundHandler);
                 }
                 else {
-                    mCameraCaptureSession.setRepeatingRequest(request, previewCaptureCallback, handler);
+                    mCameraCaptureSession.setRepeatingRequest(request, previewCaptureCallback, mCameraBackgroundHandler);
                 }
                 if( MyDebug.LOG )
                     Log.i(TAG, "setRepeatingRequest done");
@@ -5158,7 +5206,7 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "no camera or capture session");
                 return;
             }
-            mCameraCaptureSession.capture(request, previewCaptureCallback, handler);
+            mCameraCaptureSession.capture(request, previewCaptureCallback, mCameraBackgroundHandler);
         }
     }
 
@@ -5292,6 +5340,7 @@ public class CameraController2 extends CameraController {
                     } else if (mSurfaceHolder != null){
                         this.mPreviewSurface = mSurfaceHolder.getSurface();
                     }
+                    createPreviewImageReader();
                     if( MyDebug.LOG )
                         Log.i(TAG, "created new target: " + mPreviewSurface);
                 }
@@ -5349,6 +5398,15 @@ public class CameraController2 extends CameraController {
                             }
                             mPreviewBuilder.addTarget(video_recorder_surface);
                         }
+                        if (mEnablePreviewShareSurface) {
+                            mPreviewOutputConfiguration.addSurface(mPreviewImageReader.getSurface());
+                            try {
+                                mCameraCaptureSession.updateOutputConfiguration(mPreviewOutputConfiguration);
+                                mPreviewBuilder.addTarget(mPreviewImageReader.getSurface());
+                            } catch (Exception e) {
+                                Log.e(TAG, "updateOutputConfiguration with exception:" + e.toString());
+                            }
+                        }
                         try {
                             setRepeatingRequest();
                         }
@@ -5373,8 +5431,7 @@ public class CameraController2 extends CameraController {
                 @Override
                 public void onConfigureFailed(@NonNull CameraCaptureSession session) {
                     if( MyDebug.LOG ) {
-                        Log.i(TAG, "onConfigureFailed: " + session);
-                        Log.i(TAG, "captureSession was: " + mCameraCaptureSession);
+                        Log.e(TAG, "onConfigureFailed: " + session);
                     }
                     synchronized( background_camera_lock ) {
                         callback_done = true;
@@ -5416,14 +5473,32 @@ public class CameraController2 extends CameraController {
             final MyStateCallback myStateCallback = new MyStateCallback();
 
             List<Surface> surfaces;
+            List<OutputConfiguration> outputConfigurations = new ArrayList<>();
+            OutputConfiguration captureOutputConfiguration = null;
+            OutputConfiguration recordOutputConfiguration = null;
             synchronized( background_camera_lock ) {
                 Surface preview_surface = getPreviewSurface();
                 if( video_recorder != null ) {
                     if( supports_photo_video_recording && !want_video_high_speed && want_photo_video_recording ) {
                         surfaces = Arrays.asList(preview_surface, video_recorder_surface, imageReader.getSurface());
+                        captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
+                        mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
+                        if (mEnablePreviewShareSurface) {
+                            mPreviewOutputConfiguration.enableSurfaceSharing();
+                            mPreviewOutputConfiguration.addSurface(video_recorder_surface);
+                        } else {
+                            recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
+                        }
                     }
                     else {
                         surfaces = Arrays.asList(preview_surface, video_recorder_surface);
+                        mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
+                        if (mEnablePreviewShareSurface) {
+                            mPreviewOutputConfiguration.enableSurfaceSharing();
+                            mPreviewOutputConfiguration.addSurface(video_recorder_surface);
+                        } else {
+                            recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
+                        }
                     }
                     // n.b., raw not supported for photo snapshots while video recording
                 }
@@ -5431,12 +5506,17 @@ public class CameraController2 extends CameraController {
                     // future proofing - at the time of writing want_video_high_speed is only set when recording video,
                     // but if ever this is changed, can only support the preview_surface as a target
                     surfaces = Collections.singletonList(preview_surface);
+                    mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
+                    mPreviewOutputConfiguration.enableSurfaceSharing();
                 }
                 else if( imageReaderRaw != null ) {
                     surfaces = Arrays.asList(preview_surface, imageReader.getSurface(), imageReaderRaw.getSurface());
                 }
                 else {
                     surfaces = Arrays.asList(preview_surface, imageReader.getSurface());
+                    mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
+                    mPreviewOutputConfiguration.enableSurfaceSharing();
+                    captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
                 }
                 if( MyDebug.LOG ) {
                     Log.i(TAG, "texture: " + mSurfaceTexture);
@@ -5463,14 +5543,28 @@ public class CameraController2 extends CameraController {
             //if( want_video_high_speed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
                 mCameraDevice.createConstrainedHighSpeedCaptureSession(surfaces,
                     myStateCallback,
-                    handler);
+                        mCameraBackgroundHandler);
                 is_video_high_speed = true;
             }
             else {
                 try {
-                    mCameraDevice.createCaptureSession(surfaces,
-                        myStateCallback,
-                        handler);
+                    if (mEnablePreviewShareSurface) {
+                        outputConfigurations.add(mPreviewOutputConfiguration);
+                        if (recordOutputConfiguration != null) {
+                            outputConfigurations.add(recordOutputConfiguration);
+                        }
+                        if (captureOutputConfiguration != null) {
+                            outputConfigurations.add(captureOutputConfiguration);
+                        }
+                        mCameraDevice.createCaptureSessionByOutputConfigurations(
+                                outputConfigurations,
+                                myStateCallback,
+                                mCameraBackgroundHandler);
+                    } else {
+                        mCameraDevice.createCaptureSession(surfaces,
+                                myStateCallback,
+                                mCameraBackgroundHandler);
+                    }
                     is_video_high_speed = false;
                 }
                 catch(NullPointerException e) {
@@ -6120,7 +6214,7 @@ public class CameraController2 extends CameraController {
                     if( MyDebug.LOG )
                         Log.i(TAG, "capture with stillBuilder");
                     //pending_request_when_ready = stillBuilder.build();
-                    mCameraCaptureSession.capture(stillBuilder.build(), previewCaptureCallback, handler);
+                    mCameraCaptureSession.capture(stillBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
                     //captureSession.capture(stillBuilder.build(), new CameraCaptureSession.CaptureCallback() {
                     //}, handler);
                     playSound(MediaActionSound.SHUTTER_CLICK); // play shutter sound asap, otherwise user has the illusion of being slow to take photos
@@ -6517,7 +6611,7 @@ public class CameraController2 extends CameraController {
                     if( use_expo_fast_burst && burst_type == BurstType.BURSTTYPE_EXPO ) { // alway use slow burst for focus bracketing
                         if( MyDebug.LOG )
                             Log.i(TAG, "using fast burst");
-                        int sequenceId = mCameraCaptureSession.captureBurst(requests, previewCaptureCallback, handler);
+                        int sequenceId = mCameraCaptureSession.captureBurst(requests, previewCaptureCallback, mCameraBackgroundHandler);
                         if( MyDebug.LOG )
                             Log.i(TAG, "sequenceId: " + sequenceId);
                     }
@@ -6526,7 +6620,7 @@ public class CameraController2 extends CameraController {
                             Log.i(TAG, "using slow burst");
                         slow_burst_capture_requests = requests;
                         slow_burst_start_ms = System.currentTimeMillis();
-                        mCameraCaptureSession.capture(requests.get(0), previewCaptureCallback, handler);
+                        mCameraCaptureSession.capture(requests.get(0), previewCaptureCallback, mCameraBackgroundHandler);
                     }
 
                     playSound(MediaActionSound.SHUTTER_CLICK); // play shutter sound asap, otherwise user has the illusion of being slow to take photos
@@ -6765,12 +6859,12 @@ public class CameraController2 extends CameraController {
                                 Log.i(TAG, "    last continuous capture");
                         }
                         continuous_burst_requested_last_capture = !continuous_burst_in_progress;
-                        mCameraCaptureSession.capture(continuous_burst_in_progress ? request : last_request, previewCaptureCallback, handler);
+                        mCameraCaptureSession.capture(continuous_burst_in_progress ? request : last_request, previewCaptureCallback, mCameraBackgroundHandler);
 
                         if( continuous_burst_in_progress ) {
                             final int continuous_burst_rate_ms = 100;
                             // also take the next burst after a delay
-                            handler.postDelayed(new Runnable() {
+                            mCameraBackgroundHandler.postDelayed(new Runnable() {
                                 @Override
                                 public void run() {
                                     // note, even if continuous_burst_in_progress has become false by this point, still take one last
@@ -6788,14 +6882,14 @@ public class CameraController2 extends CameraController {
                                             Log.i(TAG, "...but wait for continuous burst, as waiting for too many photos");
                                         }
                                         //throw new RuntimeException(); // test
-                                        handler.postDelayed(this, continuous_burst_rate_ms);
+                                        mCameraBackgroundHandler.postDelayed(this, continuous_burst_rate_ms);
                                     }
                                     else if( picture_cb.imageQueueWouldBlock(n_burst_raw, n_burst+1) ) {
                                         if( MyDebug.LOG ) {
                                             Log.i(TAG, "...but wait for continuous burst, as image queue would block");
                                         }
                                         //throw new RuntimeException(); // test
-                                        handler.postDelayed(this, continuous_burst_rate_ms);
+                                        mCameraBackgroundHandler.postDelayed(this, continuous_burst_rate_ms);
                                     }
                                     else {
                                         takePictureBurst(true);
@@ -6811,7 +6905,7 @@ public class CameraController2 extends CameraController {
                         requests.add(last_request);
                         if( MyDebug.LOG )
                             Log.i(TAG, "captureBurst");
-                        int sequenceId = mCameraCaptureSession.captureBurst(requests, previewCaptureCallback, handler);
+                        int sequenceId = mCameraCaptureSession.captureBurst(requests, previewCaptureCallback, mCameraBackgroundHandler);
                         if( MyDebug.LOG )
                             Log.i(TAG, "sequenceId: " + sequenceId);
                     }
@@ -6840,12 +6934,12 @@ public class CameraController2 extends CameraController {
                                         return;
                                     }
                                     try {
-                                        mCameraCaptureSession.capture(n_remaining == 1 ? last_request_f : request_f, previewCaptureCallback, handler);
+                                        mCameraCaptureSession.capture(n_remaining == 1 ? last_request_f : request_f, previewCaptureCallback, mCameraBackgroundHandler);
                                         n_remaining--;
                                         if( MyDebug.LOG )
                                             Log.i(TAG, "takePictureBurst n_remaining: " + n_remaining);
                                         if( n_remaining > 0 ) {
-                                            handler.postDelayed(this, burst_delay);
+                                            mCameraBackgroundHandler.postDelayed(this, burst_delay);
                                         }
                                     }
                                     catch(CameraAccessException e) {
@@ -6932,12 +7026,12 @@ public class CameraController2 extends CameraController {
                 // first set precapture to idle - this is needed, otherwise we hang in state STATE_WAITING_PRECAPTURE_START, because precapture already occurred whilst autofocusing, and it doesn't occur again unless we first set the precapture trigger to idle
                 if( MyDebug.LOG )
                     Log.i(TAG, "capture with precaptureBuilder");
-                mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, handler);
-                mCameraCaptureSession.setRepeatingRequest(precaptureBuilder.build(), previewCaptureCallback, handler);
+                mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
+                mCameraCaptureSession.setRepeatingRequest(precaptureBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
 
                 // now set precapture
                 precaptureBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CameraMetadata.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-                mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, handler);
+                mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
             }
             catch(CameraAccessException e) {
                 if( MyDebug.LOG ) {
