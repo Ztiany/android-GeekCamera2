@@ -54,6 +54,7 @@ import androidx.annotation.RequiresApi;
 import android.util.Log;
 import android.util.Pair;
 import android.util.Range;
+import android.util.Size;
 import android.util.SizeF;
 import android.view.Display;
 import android.view.Surface;
@@ -277,6 +278,7 @@ public class CameraController2 extends CameraController {
     private final static long max_preview_exposure_time_c = 1000000000L/12;
 
     private boolean mEnablePreviewShareSurface = true;
+    private boolean mUsePreviewDeferredSurface = true;
     
     private enum RequestTagType {
         CAPTURE, // request is either for a regular non-burst capture, or the last of a burst capture sequence
@@ -5391,6 +5393,16 @@ public class CameraController2 extends CameraController {
                         if( MyDebug.LOG ) {
                             Log.i(TAG, "add surface to previewBuilder: " + surface);
                         }
+                        if (mUsePreviewDeferredSurface) {
+                            mPreviewOutputConfiguration.addSurface(surface);
+                            try {
+                                List<OutputConfiguration> finalizeOutputConfigs = new ArrayList<>();
+                                finalizeOutputConfigs.add(mPreviewOutputConfiguration);
+                                mCameraCaptureSession.finalizeOutputConfigurations(finalizeOutputConfigs);
+                            } catch (Exception e) {
+                                Log.e(TAG, "finalizeOutputConfigurations with exception:" + e.toString());
+                            }
+                        }
                         mPreviewBuilder.addTarget(surface);
                         if( video_recorder != null ) {
                             if( MyDebug.LOG ) {
@@ -5472,32 +5484,53 @@ public class CameraController2 extends CameraController {
             }
             final MyStateCallback myStateCallback = new MyStateCallback();
 
-            List<Surface> surfaces;
+            List<Surface> surfaces = null;
             List<OutputConfiguration> outputConfigurations = new ArrayList<>();
             OutputConfiguration captureOutputConfiguration = null;
             OutputConfiguration recordOutputConfiguration = null;
             synchronized( background_camera_lock ) {
-                Surface preview_surface = getPreviewSurface();
+                Surface preview_surface = null;
+                if (!mUsePreviewDeferredSurface) {
+                    preview_surface = getPreviewSurface();
+                }
                 if( video_recorder != null ) {
                     if( supports_photo_video_recording && !want_video_high_speed && want_photo_video_recording ) {
-                        surfaces = Arrays.asList(preview_surface, video_recorder_surface, imageReader.getSurface());
-                        captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
-                        mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
-                        if (mEnablePreviewShareSurface) {
-                            mPreviewOutputConfiguration.enableSurfaceSharing();
-                            mPreviewOutputConfiguration.addSurface(video_recorder_surface);
+                        if (!mUsePreviewDeferredSurface && !mEnablePreviewShareSurface) {
+                            surfaces = Arrays.asList(preview_surface, video_recorder_surface, imageReader.getSurface());
                         } else {
-                            recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
+                            captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
+                            if (preview_surface != null) {
+                                mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
+                            } else {
+                                mPreviewOutputConfiguration = new OutputConfiguration(
+                                        new android.util.Size(mPreviewWidth, mPreviewHeight),
+                                        SurfaceTexture.class);
+                            }
+                            if (mEnablePreviewShareSurface) {
+                                mPreviewOutputConfiguration.enableSurfaceSharing();
+                                mPreviewOutputConfiguration.addSurface(video_recorder_surface);
+                            } else {
+                                recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
+                            }
                         }
                     }
                     else {
-                        surfaces = Arrays.asList(preview_surface, video_recorder_surface);
-                        mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
-                        if (mEnablePreviewShareSurface) {
-                            mPreviewOutputConfiguration.enableSurfaceSharing();
-                            mPreviewOutputConfiguration.addSurface(video_recorder_surface);
+                        if (!mUsePreviewDeferredSurface && !mEnablePreviewShareSurface) {
+                            surfaces = Arrays.asList(preview_surface, video_recorder_surface);
                         } else {
-                            recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
+                            if (preview_surface != null) {
+                                mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
+                            } else {
+                                mPreviewOutputConfiguration = new OutputConfiguration(
+                                        new android.util.Size(mPreviewWidth, mPreviewHeight),
+                                        SurfaceTexture.class);
+                            }
+                            if (mEnablePreviewShareSurface) {
+                                mPreviewOutputConfiguration.enableSurfaceSharing();
+                                mPreviewOutputConfiguration.addSurface(video_recorder_surface);
+                            } else {
+                                recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
+                            }
                         }
                     }
                     // n.b., raw not supported for photo snapshots while video recording
@@ -5505,18 +5538,42 @@ public class CameraController2 extends CameraController {
                 else if( want_video_high_speed ) {
                     // future proofing - at the time of writing want_video_high_speed is only set when recording video,
                     // but if ever this is changed, can only support the preview_surface as a target
-                    surfaces = Collections.singletonList(preview_surface);
-                    mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
-                    mPreviewOutputConfiguration.enableSurfaceSharing();
+                    if (!mUsePreviewDeferredSurface && !mEnablePreviewShareSurface) {
+                        surfaces = Collections.singletonList(preview_surface);
+                    } else {
+                        if (preview_surface != null) {
+                            mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
+                        } else {
+                            mPreviewOutputConfiguration = new OutputConfiguration(
+                                    new android.util.Size(mPreviewWidth, mPreviewHeight),
+                                    SurfaceTexture.class
+                            );
+                            if (mEnablePreviewShareSurface) {
+                                mPreviewOutputConfiguration.enableSurfaceSharing();
+                            }
+                        }
+                    }
                 }
                 else if( imageReaderRaw != null ) {
                     surfaces = Arrays.asList(preview_surface, imageReader.getSurface(), imageReaderRaw.getSurface());
                 }
                 else {
-                    surfaces = Arrays.asList(preview_surface, imageReader.getSurface());
-                    mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
-                    mPreviewOutputConfiguration.enableSurfaceSharing();
-                    captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
+                    if (!mUsePreviewDeferredSurface && !mEnablePreviewShareSurface) {
+                        surfaces = Arrays.asList(preview_surface, imageReader.getSurface());
+                    } else {
+                        if (preview_surface != null) {
+                            mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
+                        } else {
+                            mPreviewOutputConfiguration = new OutputConfiguration(
+                                    new android.util.Size(mPreviewWidth, mPreviewHeight),
+                                    SurfaceTexture.class
+                            );
+                            if (mEnablePreviewShareSurface) {
+                                mPreviewOutputConfiguration.enableSurfaceSharing();
+                            }
+                            captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
+                        }
+                    }
                 }
                 if( MyDebug.LOG ) {
                     Log.i(TAG, "texture: " + mSurfaceTexture);
@@ -5548,7 +5605,7 @@ public class CameraController2 extends CameraController {
             }
             else {
                 try {
-                    if (mEnablePreviewShareSurface) {
+                    if (mEnablePreviewShareSurface || mUsePreviewDeferredSurface) {
                         outputConfigurations.add(mPreviewOutputConfiguration);
                         if (recordOutputConfiguration != null) {
                             outputConfigurations.add(recordOutputConfiguration);
