@@ -2,6 +2,7 @@ package com.deepinout.geekcamera.cameracontroller;
 
 import com.deepinout.geekcamera.MyDebug;
 import com.deepinout.geekcamera.MyUtils;
+import com.deepinout.geekcamera.cts.helpers.StaticMetadata;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -68,11 +69,11 @@ import android.view.WindowManager;
 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
 public class CameraController2 extends CameraController {
     private static final String TAG = "GC2_CC2";
-
     private final Context context;
     private CameraDevice mCameraDevice;
     private OutputConfiguration mOutputConfiguration;
     private final String cameraIdS;
+    private StaticMetadata mStaticMetadata;
 
     private final boolean is_samsung;
     private final boolean is_samsung_s7; // Galaxy S7 or Galaxy S7 Edge
@@ -277,8 +278,9 @@ public class CameraController2 extends CameraController {
     private float capture_result_focus_distance_max;*/
     private final static long max_preview_exposure_time_c = 1000000000L/12;
 
-    private boolean mEnablePreviewShareSurface = true;
-    private boolean mUsePreviewDeferredSurface = true;
+    private boolean mEnablePreviewShareSurface = false;
+    private boolean mUsePreviewDeferredSurface = false;
+
     
     private enum RequestTagType {
         CAPTURE, // request is either for a regular non-burst capture, or the last of a burst capture sequence
