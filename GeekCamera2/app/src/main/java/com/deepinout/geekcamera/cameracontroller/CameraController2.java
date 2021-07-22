@@ -2,6 +2,7 @@ package com.deepinout.geekcamera.cameracontroller;
 
 import com.deepinout.geekcamera.MyDebug;
 import com.deepinout.geekcamera.MyUtils;
+import com.deepinout.geekcamera.cts.CameraTestUtils;
 import com.deepinout.geekcamera.cts.helpers.StaticMetadata;
 
 import java.nio.ByteBuffer;
@@ -31,6 +32,7 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.DngCreator;
 import android.hardware.camera2.TotalCaptureResult;
+import android.hardware.camera2.params.InputConfiguration;
 import android.hardware.camera2.params.MeteringRectangle;
 import android.hardware.camera2.params.OutputConfiguration;
 import android.hardware.camera2.params.RggbChannelVector;
@@ -43,6 +45,7 @@ import androidx.exifinterface.media.ExifInterface;
 import android.media.CamcorderProfile;
 import android.media.Image;
 import android.media.ImageReader;
+import android.media.ImageWriter;
 import android.media.MediaActionSound;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
@@ -278,8 +281,20 @@ public class CameraController2 extends CameraController {
     private float capture_result_focus_distance_max;*/
     private final static long max_preview_exposure_time_c = 1000000000L/12;
 
+    //#### Added For App ZSL(Reprocessable)
     private boolean mEnablePreviewShareSurface = false;
     private boolean mUsePreviewDeferredSurface = false;
+    private boolean mIsReprocesableSupport = false;
+    private boolean mEnableReprocessable = false;
+    private int mMaxInputStreams = 0;
+    private int mInputFormat = ImageFormat.UNKNOWN;
+    private android.util.Size mInputSize;
+    CameraTestUtils.SimpleImageReaderListener mInputImageReaderListener;
+    ImageReader mInputImageReader;
+    CameraTestUtils.SimpleImageWriterListener mInputImageWriterListener;
+    ImageWriter mInputImageWriter;
+    CameraTestUtils.SimpleCaptureCallback mZslResultListener;
+    //#### Added For App ZSL(Reprocessable) End
 
     
     private enum RequestTagType {
@@ -1936,6 +1951,17 @@ public class CameraController2 extends CameraController {
             if(MyDebug.LOG)
                 Log.i(TAG, "get camera id list");
             this.cameraIdS = manager.getCameraIdList()[cameraId];
+            mStaticMetadata = new StaticMetadata(manager.getCameraCharacteristics(cameraIdS));
+            mIsReprocesableSupport =
+                    mStaticMetadata.isCapabilitySupported(
+                            CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING) ||
+                            mStaticMetadata.isCapabilitySupported(
+                                    CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING);
+            setupInputSizeAndFormat();
+            setupInputStreamImageReader();
+            if (MyDebug.LOG) {
+                Log.i(TAG, "mIsReprocesableSupport:" + mIsReprocesableSupport);
+            }
             if(MyDebug.LOG)
                 Log.i(TAG, "about to open camera: " + cameraIdS, new Throwable());
             manager.openCamera(cameraIdS, myStateCallback, mCameraBackgroundHandler);
@@ -1949,8 +1975,7 @@ public class CameraController2 extends CameraController {
             }
             e.printStackTrace();
             throw new CameraControllerException();
-        }
-        catch(UnsupportedOperationException e) {
+        } catch(UnsupportedOperationException e) {
             // Google Camera catches UnsupportedOperationException
             if( MyDebug.LOG ) {
                 Log.e(TAG, "failed to open camera: UnsupportedOperationException");
@@ -2085,6 +2110,7 @@ public class CameraController2 extends CameraController {
             mCameraDevice = null;
         }
         closePictureImageReader();
+        releaseInputImageReader();
         /*if( previewImageReader != null ) {
             previewImageReader.close();
             previewImageReader = null;
@@ -2179,6 +2205,26 @@ public class CameraController2 extends CameraController {
         if( mPreviewImageReader != null ) {
             mPreviewImageReader.close();
             mPreviewImageReader = null;
+        }
+    }
+
+    private void releaseInputImageReader() {
+        if (mInputImageReaderListener != null) {
+            mInputImageReaderListener.drain();
+            mInputImageReaderListener = null;
+        }
+        if (mInputImageReader != null) {
+            mInputImageReader.close();
+            mInputImageReader = null;
+        }
+        if (mInputImageWriter != null) {
+            mInputImageWriter.close();
+            mInputImageWriter = null;
+            mInputImageWriterListener = null;
+        }
+        if (mZslResultListener != null) {
+            mZslResultListener.drain();
+            mZslResultListener = null;
         }
     }
 
@@ -2693,6 +2739,8 @@ public class CameraController2 extends CameraController {
                 MediaFormat.MIMETYPE_VIDEO_AVC, sz.getWidth(), sz.getHeight());
         format.setInteger(MediaFormat.KEY_FRAME_RATE, frameRate);
         MediaCodecList mcl = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+        Log.i(TAG, "isSupportedByAVCEncoder, sz:" + sz + ",frameRate:" + frameRate + ", result:" +
+                mcl.findEncoderForFormat(format));
         return mcl.findEncoderForFormat(format) != null;
     }
 
@@ -5279,6 +5327,76 @@ public class CameraController2 extends CameraController {
         }
     }
 
+    private boolean isReprocessSupported(String cameraId, int format)
+            throws CameraAccessException {
+        if (format != ImageFormat.YUV_420_888 && format != ImageFormat.PRIVATE) {
+            throw new IllegalArgumentException(
+                    "format " + format + " is not supported for reprocessing");
+        }
+
+        int cap = CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING;
+        if (format == ImageFormat.PRIVATE) {
+            cap = CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_PRIVATE_REPROCESSING;
+        }
+        return mStaticMetadata.isCapabilitySupported(cap);
+    }
+
+    private android.util.Size getMaxSize(int format, StaticMetadata.StreamDirection direction) {
+        android.util.Size[] sizes = mStaticMetadata.getAvailableSizesForFormatChecked(format, direction);
+        return CameraTestUtils.getAscendingOrderSizes(Arrays.asList(sizes), /*ascending*/false).get(0);
+    }
+
+    private boolean isYuvReprocessSupported(String cameraId) throws Exception {
+        return isReprocessSupported(cameraId, ImageFormat.YUV_420_888);
+    }
+
+    private boolean isOpaqueReprocessSupported(String cameraId) throws Exception {
+        return isReprocessSupported(cameraId, ImageFormat.PRIVATE);
+    }
+
+    private void setupInputSizeAndFormat() {
+        mMaxInputStreams =
+                mStaticMetadata.getValueFromKeyNonNull(CameraCharacteristics.REQUEST_MAX_NUM_INPUT_STREAMS);
+        if (MyDebug.LOG) {
+            Log.i(TAG, "max supported input streams:" + mMaxInputStreams +
+                            ",mIsReprocesableSupport:" + mIsReprocesableSupport +
+                            ",mEnableReprocessable:" + mEnableReprocessable);
+        }
+        try {
+            if (mEnableReprocessable && mIsReprocesableSupport) {
+                if (isOpaqueReprocessSupported(cameraIdS)) {
+                    mInputFormat = ImageFormat.PRIVATE;
+                    mInputSize = getMaxSize(mInputFormat, StaticMetadata.StreamDirection.Input);
+                    Log.i(TAG, "choose private reprocess.");
+                    return;
+                }
+                if (isYuvReprocessSupported(cameraIdS)) {
+                    mInputFormat = ImageFormat.YUV_420_888;
+                    mInputSize = getMaxSize(mInputFormat, StaticMetadata.StreamDirection.Input);
+                    Log.i(TAG, "choose yuv reprocess.");
+                    return;
+                }
+            }
+        } catch (Exception e) {
+        }
+
+        if (MyDebug.LOG) {
+            Log.i(TAG, "Reprocess not enabled.");
+        }
+    }
+
+    private void setupInputStreamImageReader() {
+        if (mEnableReprocessable && mMaxInputStreams > 0 && mIsReprocesableSupport) {
+            mInputImageReaderListener = new CameraTestUtils.SimpleImageReaderListener(true, 4);
+            mInputImageReader = CameraTestUtils.makeImageReader(mInputSize,
+                    mInputFormat,
+                    5,
+                    mInputImageReaderListener,
+                    mCameraBackgroundHandler);
+            mZslResultListener = new CameraTestUtils.SimpleCaptureCallback(true, 50);
+        }
+    }
+
     private void createCaptureSession(final MediaRecorder video_recorder, boolean want_photo_video_recording) throws CameraControllerException {
         if( MyDebug.LOG )
             Log.i(TAG, "create capture session");
@@ -5421,6 +5539,14 @@ public class CameraController2 extends CameraController {
                                 Log.e(TAG, "updateOutputConfiguration with exception:" + e.toString());
                             }
                         }
+                        if (mCameraCaptureSession.isReprocessable()) {
+                            mInputImageWriter = ImageWriter.newInstance(
+                                    mCameraCaptureSession.getInputSurface(),
+                                    2
+                            );
+                            mInputImageWriterListener = new CameraTestUtils.SimpleImageWriterListener(mInputImageWriter);
+                            mPreviewBuilder.addTarget(mInputImageReader.getSurface());
+                        }
                         try {
                             setRepeatingRequest();
                         }
@@ -5487,9 +5613,15 @@ public class CameraController2 extends CameraController {
             final MyStateCallback myStateCallback = new MyStateCallback();
 
             List<Surface> surfaces = null;
+            InputConfiguration inputConfiguration = null;
             List<OutputConfiguration> outputConfigurations = new ArrayList<>();
             OutputConfiguration captureOutputConfiguration = null;
             OutputConfiguration recordOutputConfiguration = null;
+            if (mEnableReprocessable && mMaxInputStreams > 0 && mIsReprocesableSupport) {
+                inputConfiguration = new InputConfiguration(mInputSize.getWidth(),
+                        mInputSize.getHeight(),
+                        mInputFormat);
+            }
             synchronized( background_camera_lock ) {
                 Surface preview_surface = null;
                 if (!mUsePreviewDeferredSurface) {
@@ -5498,7 +5630,9 @@ public class CameraController2 extends CameraController {
                 if( video_recorder != null ) {
                     if( supports_photo_video_recording && !want_video_high_speed && want_photo_video_recording ) {
                         if (!mUsePreviewDeferredSurface && !mEnablePreviewShareSurface) {
-                            surfaces = Arrays.asList(preview_surface, video_recorder_surface, imageReader.getSurface());
+                            surfaces = Arrays.asList(preview_surface,
+                                    video_recorder_surface,
+                                    imageReader.getSurface());
                         } else {
                             captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
                             if (preview_surface != null) {
@@ -5615,14 +5749,35 @@ public class CameraController2 extends CameraController {
                         if (captureOutputConfiguration != null) {
                             outputConfigurations.add(captureOutputConfiguration);
                         }
-                        mCameraDevice.createCaptureSessionByOutputConfigurations(
-                                outputConfigurations,
-                                myStateCallback,
-                                mCameraBackgroundHandler);
+                        if (inputConfiguration != null) {
+                            mCameraDevice.createReprocessableCaptureSessionByConfigurations(inputConfiguration,
+                                    outputConfigurations,
+                                    myStateCallback,
+                                    mCameraBackgroundHandler);
+                        } else {
+                            mCameraDevice.createCaptureSessionByOutputConfigurations(
+                                    outputConfigurations,
+                                    myStateCallback,
+                                    mCameraBackgroundHandler);
+                        }
+
                     } else {
-                        mCameraDevice.createCaptureSession(surfaces,
-                                myStateCallback,
-                                mCameraBackgroundHandler);
+                        if (inputConfiguration != null) {
+                            ArrayList<Surface> output_surfaces = new ArrayList<>(surfaces);
+                            if (mInputImageReader != null) {
+                                output_surfaces.add(mInputImageReader.getSurface());
+                            }
+                            mCameraDevice.createReprocessableCaptureSession(
+                                    inputConfiguration,
+                                    output_surfaces,
+                                    myStateCallback,
+                                    mCameraBackgroundHandler
+                            );
+                        } else {
+                            mCameraDevice.createCaptureSession(surfaces,
+                                    myStateCallback,
+                                    mCameraBackgroundHandler);
+                        }
                     }
                     is_video_high_speed = false;
                 }
@@ -6155,7 +6310,23 @@ public class CameraController2 extends CameraController {
                         Log.i(TAG, "imageReader surface: " + imageReader.getSurface().toString());
                     }
                 }
-                stillBuilder = mCameraDevice.createCaptureRequest(previewIsVideoMode ? CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
+                if (mEnableReprocessable && mMaxInputStreams > 0 && mIsReprocesableSupport) {
+                    try {
+                        Log.i(TAG, "createReprocessCaptureRequest begin");
+                        Image inputImage = mInputImageReaderListener.getImage(3000);
+                        stillBuilder = mCameraDevice.createReprocessCaptureRequest(
+                                mZslResultListener.getTotalCaptureResult(inputImage.getTimestamp()));
+                        mInputImageWriter.queueInputImage(inputImage);
+                        inputImage.close();
+                        Log.i(TAG, "createReprocessCaptureRequest end");
+                    } catch (Exception e) {
+                        Log.e(TAG, "createReprocessCaptureRequest failed:" + e.toString());
+                    }
+                } else {
+                    stillBuilder = mCameraDevice.createCaptureRequest(previewIsVideoMode ?
+                            CameraDevice.TEMPLATE_VIDEO_SNAPSHOT : CameraDevice.TEMPLATE_STILL_CAPTURE);
+                }
+
                 stillBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_STILL_CAPTURE);
                 stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE));
                 camera_settings.setupBuilder(stillBuilder, true);
@@ -7565,6 +7736,9 @@ public class CameraController2 extends CameraController {
         public void onCaptureBufferLost(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull Surface target, long frameNumber) {
             if( MyDebug.LOG )
                 Log.i(TAG, "onCaptureBufferLost: " + frameNumber);
+            if (mZslResultListener != null) {
+                mZslResultListener.onCaptureBufferLost(session, request, target, frameNumber);
+            }
             super.onCaptureBufferLost(session, request, target, frameNumber);
         }
 
@@ -7576,6 +7750,9 @@ public class CameraController2 extends CameraController {
                 Log.i(TAG, "was image captured?: " + failure.wasImageCaptured());
                 Log.i(TAG, "sequenceId: " + failure.getSequenceId());
             }
+            if (mZslResultListener != null) {
+                mZslResultListener.onCaptureFailed(session, request, failure);
+            }
             super.onCaptureFailed(session, request, failure); // API docs say this does nothing, but call it just to be safe
         }
 
@@ -7584,6 +7761,9 @@ public class CameraController2 extends CameraController {
             if( MyDebug.LOG ) {
                 Log.i(TAG, "onCaptureSequenceAborted");
                 Log.i(TAG, "sequenceId: " + sequenceId);
+            }
+            if (mZslResultListener != null) {
+                mZslResultListener.onCaptureSequenceAborted(session, sequenceId);
             }
             super.onCaptureSequenceAborted(session, sequenceId); // API docs say this does nothing, but call it just to be safe
         }
@@ -7594,6 +7774,9 @@ public class CameraController2 extends CameraController {
                 Log.i(TAG, "onCaptureSequenceCompleted");
                 Log.i(TAG, "sequenceId: " + sequenceId);
                 Log.i(TAG, "frameNumber: " + frameNumber);
+            }
+            if (mZslResultListener != null) {
+                mZslResultListener.onCaptureSequenceCompleted(session, sequenceId, frameNumber);
             }
             super.onCaptureSequenceCompleted(session, sequenceId, frameNumber); // API docs say this does nothing, but call it just to be safe
         }
@@ -7606,6 +7789,9 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "frameNumber: " + frameNumber);
                     Log.i(TAG, "exposure time: " + request.get(CaptureRequest.SENSOR_EXPOSURE_TIME));
                 }
+            }
+            if (mZslResultListener != null) {
+                mZslResultListener.onCaptureStarted(session, request, timestamp, frameNumber);
             }
             // n.b., we don't play the shutter sound here for RequestTagType.CAPTURE, as it typically sounds "too late"
             // (if ever we changed this, would also need to fix for burst, where we only set the RequestTagType.CAPTURE for the last image)
@@ -7621,6 +7807,9 @@ public class CameraController2 extends CameraController {
             // not all results may be available. E.g., OnePlus 3T on Android 7 (OxygenOS 4.0.2) reports null for AF_STATE from this method.
             // We'd also need to fix up the discarding of old frames in process(), as we probably don't want to be discarding the
             // complete results from onCaptureCompleted()!
+            if (mZslResultListener != null) {
+                mZslResultListener.onCaptureProgressed(session, request, partialResult);
+            }
             super.onCaptureProgressed(session, request, partialResult); // API docs say this does nothing, but call it just to be safe (as with Google Camera)
         }
 
@@ -7639,6 +7828,9 @@ public class CameraController2 extends CameraController {
             }
             process(request, result);
             processCompleted(request, result);
+            if (mZslResultListener != null) {
+                mZslResultListener.onCaptureCompleted(session, request, result);
+            }
             super.onCaptureCompleted(session, request, result); // API docs say this does nothing, but call it just to be safe (as with Google Camera)
         }
 

@@ -11,6 +11,7 @@ import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
+import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.ImageReader;
 import android.media.MediaCodec;
@@ -59,6 +60,7 @@ public class CameraControllerManager2 extends CameraControllerManager {
                     }
                     getHardwareLevel(mContext, i);
                     printStreamConfigurationMap(mContext, i);
+                    printAvailableSessionKeys(mContext, i);
                 }
                 mPrintedInfo = true;
             }
@@ -295,6 +297,19 @@ public class CameraControllerManager2 extends CameraControllerManager {
             e.printStackTrace();
         }
         return false;
+    }
+
+    private void printAvailableSessionKeys(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            List <CaptureRequest.Key<?>> availabeSessionKeys = characteristics.getAvailableSessionKeys();
+            for (CaptureRequest.Key sessionKey : availabeSessionKeys) {
+                Log.i(TAG, "cameraId;" + cameraIdS + ", sessionKey name:" + sessionKey.getName());
+            }
+        } catch (Exception e) {
+
+        }
     }
 
     private void printStreamConfigurationMap(Context context, int cameraId) {

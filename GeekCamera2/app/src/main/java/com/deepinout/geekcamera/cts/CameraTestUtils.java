@@ -402,6 +402,18 @@ public class CameraTestUtils extends Assert {
                 new LinkedBlockingQueue<>();
 
         private AtomicLong mNumFramesArrived = new AtomicLong(0);
+        private final boolean mAsyncMode;
+        private final int mMaxImages;
+
+        public SimpleCaptureCallback() {
+            mAsyncMode = false;
+            mMaxImages = 0;
+        }
+
+        public SimpleCaptureCallback(boolean asyncMode, int maxImages) {
+            mAsyncMode = asyncMode;
+            mMaxImages = maxImages;
+        }
 
         @Override
         public void onCaptureStarted(CameraCaptureSession session, CaptureRequest request,
@@ -420,6 +432,9 @@ public class CameraTestUtils extends Assert {
             try {
                 mNumFramesArrived.incrementAndGet();
                 mQueue.put(result);
+                if (mAsyncMode && mQueue.size() >= mMaxImages) {
+                    mQueue.poll();
+                }
             } catch (InterruptedException e) {
                 throw new UnsupportedOperationException(
                         "Can't handle InterruptedException in onCaptureCompleted");
