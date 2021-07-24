@@ -432,7 +432,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 Log.d(TAG, "is_test: " + is_test);
         }
 
-        this.using_android_l = Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && applicationInterface.useCamera2();
+        this.using_android_l = true;//Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && applicationInterface.useCamera2();
         if( MyDebug.LOG ) {
             Log.d(TAG, "using_android_l?: " + using_android_l);
         }

@@ -936,7 +936,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        //test_force_supports_camera2 = true; // test
+//        test_force_supports_camera2 = true; // test
         if( test_force_supports_camera2 ) {
             if( Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP ) {
                 if( MyDebug.LOG )

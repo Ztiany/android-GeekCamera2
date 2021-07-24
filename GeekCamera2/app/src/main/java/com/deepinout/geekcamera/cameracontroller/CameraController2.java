@@ -281,11 +281,12 @@ public class CameraController2 extends CameraController {
     private float capture_result_focus_distance_max;*/
     private final static long max_preview_exposure_time_c = 1000000000L/12;
 
-    //#### Added For App ZSL(Reprocessable)
     private boolean mEnablePreviewShareSurface = false;
     private boolean mUsePreviewDeferredSurface = false;
-    private boolean mIsReprocesableSupport = false;
-    private boolean mEnableReprocessable = false;
+
+    //#### Added For App ZSL(Reprocessable)
+    private boolean mIsReprocesableSupport;
+    private boolean  mEnableReprocessable= true;
     private int mMaxInputStreams = 0;
     private int mInputFormat = ImageFormat.UNKNOWN;
     private android.util.Size mInputSize;
@@ -1321,6 +1322,10 @@ public class CameraController2 extends CameraController {
             Image image = reader.acquireNextImage();
             if( MyDebug.LOG )
                 Log.i(TAG, "image timestamp: " + image.getTimestamp());
+            if (mEnableReprocessable) {
+                Log.i(TAG, "[ZSL] onImageAvailable, timestamp:" + image.getTimestamp() +
+                                ",format:" + image.getFormat());
+            }
             ByteBuffer buffer = image.getPlanes()[0].getBuffer();
             byte [] bytes = new byte[buffer.remaining()];
             if( MyDebug.LOG )
@@ -1960,7 +1965,7 @@ public class CameraController2 extends CameraController {
             setupInputSizeAndFormat();
             setupInputStreamImageReader();
             if (MyDebug.LOG) {
-                Log.i(TAG, "mIsReprocesableSupport:" + mIsReprocesableSupport);
+                Log.i(TAG, "[ZSL] mIsReprocesableSupport:" + mIsReprocesableSupport);
             }
             if(MyDebug.LOG)
                 Log.i(TAG, "about to open camera: " + cameraIdS, new Throwable());
@@ -5355,10 +5360,12 @@ public class CameraController2 extends CameraController {
     }
 
     private void setupInputSizeAndFormat() {
-        mMaxInputStreams =
-                mStaticMetadata.getValueFromKeyNonNull(CameraCharacteristics.REQUEST_MAX_NUM_INPUT_STREAMS);
+        if (mIsReprocesableSupport) {
+            mMaxInputStreams =
+                    mStaticMetadata.getValueFromKeyNonNull(CameraCharacteristics.REQUEST_MAX_NUM_INPUT_STREAMS);
+        }
         if (MyDebug.LOG) {
-            Log.i(TAG, "max supported input streams:" + mMaxInputStreams +
+            Log.i(TAG, "[ZSL] max supported input streams:" + mMaxInputStreams +
                             ",mIsReprocesableSupport:" + mIsReprocesableSupport +
                             ",mEnableReprocessable:" + mEnableReprocessable);
         }
@@ -5367,13 +5374,13 @@ public class CameraController2 extends CameraController {
                 if (isOpaqueReprocessSupported(cameraIdS)) {
                     mInputFormat = ImageFormat.PRIVATE;
                     mInputSize = getMaxSize(mInputFormat, StaticMetadata.StreamDirection.Input);
-                    Log.i(TAG, "choose private reprocess.");
+                    Log.i(TAG, "[ZSL] choose private reprocess.");
                     return;
                 }
                 if (isYuvReprocessSupported(cameraIdS)) {
                     mInputFormat = ImageFormat.YUV_420_888;
                     mInputSize = getMaxSize(mInputFormat, StaticMetadata.StreamDirection.Input);
-                    Log.i(TAG, "choose yuv reprocess.");
+                    Log.i(TAG, "[ZSL] choose yuv reprocess.");
                     return;
                 }
             }
@@ -5387,10 +5394,12 @@ public class CameraController2 extends CameraController {
 
     private void setupInputStreamImageReader() {
         if (mEnableReprocessable && mMaxInputStreams > 0 && mIsReprocesableSupport) {
+            Log.i(TAG, "[ZSL] setupInputStreamImageReader mInputSize:" + mInputSize +
+                            ",mInputFormat:" + mInputFormat);
             mInputImageReaderListener = new CameraTestUtils.SimpleImageReaderListener(true, 4);
             mInputImageReader = CameraTestUtils.makeImageReader(mInputSize,
                     mInputFormat,
-                    5,
+                    6,
                     mInputImageReaderListener,
                     mCameraBackgroundHandler);
             mZslResultListener = new CameraTestUtils.SimpleCaptureCallback(true, 50);
@@ -5618,6 +5627,7 @@ public class CameraController2 extends CameraController {
             OutputConfiguration captureOutputConfiguration = null;
             OutputConfiguration recordOutputConfiguration = null;
             if (mEnableReprocessable && mMaxInputStreams > 0 && mIsReprocesableSupport) {
+                Log.i(TAG, "[ZSL] new InputConfiguration.");
                 inputConfiguration = new InputConfiguration(mInputSize.getWidth(),
                         mInputSize.getHeight(),
                         mInputFormat);
@@ -6312,13 +6322,15 @@ public class CameraController2 extends CameraController {
                 }
                 if (mEnableReprocessable && mMaxInputStreams > 0 && mIsReprocesableSupport) {
                     try {
-                        Log.i(TAG, "createReprocessCaptureRequest begin");
+                        Log.i(TAG, "[ZSL] createReprocessCaptureRequest begin");
                         Image inputImage = mInputImageReaderListener.getImage(3000);
+                        Log.i(TAG, "[ZSL] createReprocessCaptureRequest");
                         stillBuilder = mCameraDevice.createReprocessCaptureRequest(
-                                mZslResultListener.getTotalCaptureResult(inputImage.getTimestamp()));
+                                mZslResultListener.getCaptureResult(3000, inputImage.getTimestamp()));
+                        Log.i(TAG, "[ZSL] Image writer queueInputImage, timestamp:" + inputImage.getTimestamp());
                         mInputImageWriter.queueInputImage(inputImage);
                         inputImage.close();
-                        Log.i(TAG, "createReprocessCaptureRequest end");
+                        Log.i(TAG, "[ZSL] createReprocessCaptureRequest end");
                     } catch (Exception e) {
                         Log.e(TAG, "createReprocessCaptureRequest failed:" + e.toString());
                     }
