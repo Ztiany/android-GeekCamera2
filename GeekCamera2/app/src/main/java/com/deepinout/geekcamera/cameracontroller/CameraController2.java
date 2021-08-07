@@ -1869,6 +1869,10 @@ public class CameraController2 extends CameraController {
 
                         // note, this won't start the preview yet, but we create the previewBuilder in order to start setting camera parameters
                         createPreviewRequest();
+                        for (int template = CameraDevice.TEMPLATE_PREVIEW;
+                             template <= CameraDevice.TEMPLATE_MANUAL; template ++) {
+                            MyUtils.printCaptureRequest(mCameraDevice.createCaptureRequest(template).build(), template);
+                        }
                     }
                     catch(CameraAccessException e) {
                         if( MyDebug.LOG ) {

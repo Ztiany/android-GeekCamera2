@@ -4,6 +4,8 @@ import android.graphics.ImageFormat;
 import android.graphics.PixelFormat;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraMetadata;
+import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.params.MeteringRectangle;
 import android.util.Log;
 
 import com.deepinout.geekcamera.cameracontroller.CameraController;
@@ -13,6 +15,19 @@ import java.util.List;
 
 public class MyUtils {
     private static final String TAG = "GC2_MyUtils";
+
+    public static void printCaptureRequest(CaptureRequest captureRequest, int template) {
+        List<CaptureRequest.Key<?>> keys = captureRequest.getKeys();
+        Log.i(TAG, "template:" + template);
+        for (CaptureRequest.Key key : keys) {
+            if (captureRequest.get(key) instanceof MeteringRectangle[]) {
+                MeteringRectangle[] meteringRectangles = (MeteringRectangle[]) captureRequest.get(key);
+                Log.i(TAG, key.getName() + ":" + meteringRectangles[0].toString() + ",");
+            } else {
+                Log.i(TAG, key.getName() + ":" + captureRequest.get(key).toString() + ",");
+            }
+        }
+    }
 
     public static List<String> convertCapabilityToString(int[] capabilities) {
         List<String> output_capabilities_string = new ArrayList<>();
