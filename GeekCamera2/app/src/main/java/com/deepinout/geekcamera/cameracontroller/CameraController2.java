@@ -13,6 +13,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Queue;
+import java.util.concurrent.Executors;
 
 import android.app.Activity;
 import android.content.Context;
@@ -36,6 +37,7 @@ import android.hardware.camera2.params.InputConfiguration;
 import android.hardware.camera2.params.MeteringRectangle;
 import android.hardware.camera2.params.OutputConfiguration;
 import android.hardware.camera2.params.RggbChannelVector;
+import android.hardware.camera2.params.SessionConfiguration;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.hardware.camera2.params.TonemapCurve;
 import android.location.Location;
@@ -74,6 +76,7 @@ public class CameraController2 extends CameraController {
     private static final String TAG = "GC2_CC2";
     private final Context context;
     private CameraDevice mCameraDevice;
+    private SessionConfiguration mSessionConfiguration;
     private OutputConfiguration mOutputConfiguration;
     private final String cameraIdS;
     private StaticMetadata mStaticMetadata;
@@ -82,6 +85,7 @@ public class CameraController2 extends CameraController {
     private final boolean is_samsung_s7; // Galaxy S7 or Galaxy S7 Edge
 
     private CameraCharacteristics characteristics;
+    private List <CaptureRequest.Key<?>> mAvailableSessionKeys;
     // cached characteristics (use this for values that need to be frequently accessed, e.g., per frame, to improve performance);
     private int characteristics_sensor_orientation;
     private Facing characteristics_facing;
@@ -1834,6 +1838,7 @@ public class CameraController2 extends CameraController {
                         if( MyDebug.LOG )
                             Log.i(TAG, "try to get camera characteristics");
                         characteristics = manager.getCameraCharacteristics(cameraIdS);
+                        mAvailableSessionKeys = characteristics.getAvailableSessionKeys();
                         if( MyDebug.LOG )
                             Log.i(TAG, "successfully obtained camera characteristics");
                         // now read cached values
@@ -5626,7 +5631,8 @@ public class CameraController2 extends CameraController {
             List<OutputConfiguration> outputConfigurations = new ArrayList<>();
             OutputConfiguration captureOutputConfiguration = null;
             OutputConfiguration recordOutputConfiguration = null;
-            if (mEnableReprocessable && mMaxInputStreams > 0 && mIsReprocesableSupport) {
+            OutputConfiguration outputForInputConfiguration = null;
+            if (video_recorder == null && mEnableReprocessable && mMaxInputStreams > 0 && mIsReprocesableSupport) {
                 Log.i(TAG, "[ZSL] new InputConfiguration.");
                 inputConfiguration = new InputConfiguration(mInputSize.getWidth(),
                         mInputSize.getHeight(),
@@ -5637,46 +5643,44 @@ public class CameraController2 extends CameraController {
                 if (!mUsePreviewDeferredSurface) {
                     preview_surface = getPreviewSurface();
                 }
-                if( video_recorder != null ) {
-                    if( supports_photo_video_recording && !want_video_high_speed && want_photo_video_recording ) {
+                if (video_recorder != null ) {
+                    if (supports_photo_video_recording && !want_video_high_speed && want_photo_video_recording) {
                         if (!mUsePreviewDeferredSurface && !mEnablePreviewShareSurface) {
                             surfaces = Arrays.asList(preview_surface,
                                     video_recorder_surface,
                                     imageReader.getSurface());
+                        }
+                        captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
+                        if (preview_surface != null) {
+                            mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
                         } else {
-                            captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
-                            if (preview_surface != null) {
-                                mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
-                            } else {
-                                mPreviewOutputConfiguration = new OutputConfiguration(
-                                        new android.util.Size(mPreviewWidth, mPreviewHeight),
-                                        SurfaceTexture.class);
-                            }
-                            if (mEnablePreviewShareSurface) {
-                                mPreviewOutputConfiguration.enableSurfaceSharing();
-                                mPreviewOutputConfiguration.addSurface(video_recorder_surface);
-                            } else {
-                                recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
-                            }
+                            mPreviewOutputConfiguration = new OutputConfiguration(
+                                    new android.util.Size(mPreviewWidth, mPreviewHeight),
+                                    SurfaceTexture.class);
+                        }
+                        if (mEnablePreviewShareSurface) {
+                            mPreviewOutputConfiguration.enableSurfaceSharing();
+                            mPreviewOutputConfiguration.addSurface(video_recorder_surface);
+                        } else {
+                            recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
                         }
                     }
                     else {
                         if (!mUsePreviewDeferredSurface && !mEnablePreviewShareSurface) {
                             surfaces = Arrays.asList(preview_surface, video_recorder_surface);
+                        }
+                        if (preview_surface != null) {
+                            mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
                         } else {
-                            if (preview_surface != null) {
-                                mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
-                            } else {
-                                mPreviewOutputConfiguration = new OutputConfiguration(
-                                        new android.util.Size(mPreviewWidth, mPreviewHeight),
-                                        SurfaceTexture.class);
-                            }
-                            if (mEnablePreviewShareSurface) {
-                                mPreviewOutputConfiguration.enableSurfaceSharing();
-                                mPreviewOutputConfiguration.addSurface(video_recorder_surface);
-                            } else {
-                                recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
-                            }
+                            mPreviewOutputConfiguration = new OutputConfiguration(
+                                    new android.util.Size(mPreviewWidth, mPreviewHeight),
+                                    SurfaceTexture.class);
+                        }
+                        if (mEnablePreviewShareSurface) {
+                            mPreviewOutputConfiguration.enableSurfaceSharing();
+                            mPreviewOutputConfiguration.addSurface(video_recorder_surface);
+                        } else {
+                            recordOutputConfiguration = new OutputConfiguration(video_recorder_surface);
                         }
                     }
                     // n.b., raw not supported for photo snapshots while video recording
@@ -5706,20 +5710,19 @@ public class CameraController2 extends CameraController {
                 else {
                     if (!mUsePreviewDeferredSurface && !mEnablePreviewShareSurface) {
                         surfaces = Arrays.asList(preview_surface, imageReader.getSurface());
-                    } else {
-                        if (preview_surface != null) {
-                            mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
-                        } else {
-                            mPreviewOutputConfiguration = new OutputConfiguration(
-                                    new android.util.Size(mPreviewWidth, mPreviewHeight),
-                                    SurfaceTexture.class
-                            );
-                            if (mEnablePreviewShareSurface) {
-                                mPreviewOutputConfiguration.enableSurfaceSharing();
-                            }
-                            captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
-                        }
                     }
+                    if (preview_surface != null) {
+                        mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
+                    } else {
+                        mPreviewOutputConfiguration = new OutputConfiguration(
+                                new android.util.Size(mPreviewWidth, mPreviewHeight),
+                                SurfaceTexture.class
+                        );
+                    }
+                    if (mEnablePreviewShareSurface) {
+                        mPreviewOutputConfiguration.enableSurfaceSharing();
+                    }
+                    captureOutputConfiguration = new OutputConfiguration(imageReader.getSurface());
                 }
                 if( MyDebug.LOG ) {
                     Log.i(TAG, "texture: " + mSurfaceTexture);
@@ -5742,67 +5745,89 @@ public class CameraController2 extends CameraController {
                     }
                 }
             }
+            if (mPreviewOutputConfiguration != null) {
+                outputConfigurations.add(mPreviewOutputConfiguration);
+            }
+            if (recordOutputConfiguration != null) {
+                outputConfigurations.add(recordOutputConfiguration);
+            }
+            if (captureOutputConfiguration != null) {
+                outputConfigurations.add(captureOutputConfiguration);
+            }
             if( video_recorder != null && want_video_high_speed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
-            //if( want_video_high_speed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
-                mCameraDevice.createConstrainedHighSpeedCaptureSession(surfaces,
-                    myStateCallback,
-                        mCameraBackgroundHandler);
                 is_video_high_speed = true;
             }
-            else {
-                try {
-                    if (mEnablePreviewShareSurface || mUsePreviewDeferredSurface) {
-                        outputConfigurations.add(mPreviewOutputConfiguration);
-                        if (recordOutputConfiguration != null) {
-                            outputConfigurations.add(recordOutputConfiguration);
-                        }
-                        if (captureOutputConfiguration != null) {
-                            outputConfigurations.add(captureOutputConfiguration);
-                        }
-                        if (inputConfiguration != null) {
-                            mCameraDevice.createReprocessableCaptureSessionByConfigurations(inputConfiguration,
-                                    outputConfigurations,
-                                    myStateCallback,
-                                    mCameraBackgroundHandler);
-                        } else {
-                            mCameraDevice.createCaptureSessionByOutputConfigurations(
-                                    outputConfigurations,
-                                    myStateCallback,
-                                    mCameraBackgroundHandler);
-                        }
+            if (mInputImageReader != null) {
+                outputForInputConfiguration = new OutputConfiguration(mInputImageReader.getSurface());
+                outputConfigurations.add(outputForInputConfiguration);
+            }
 
-                    } else {
-                        if (inputConfiguration != null) {
-                            ArrayList<Surface> output_surfaces = new ArrayList<>(surfaces);
-                            if (mInputImageReader != null) {
-                                output_surfaces.add(mInputImageReader.getSurface());
-                            }
-                            mCameraDevice.createReprocessableCaptureSession(
-                                    inputConfiguration,
-                                    output_surfaces,
-                                    myStateCallback,
-                                    mCameraBackgroundHandler
-                            );
-                        } else {
-                            mCameraDevice.createCaptureSession(surfaces,
-                                    myStateCallback,
-                                    mCameraBackgroundHandler);
-                        }
-                    }
-                    is_video_high_speed = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                mSessionConfiguration = new SessionConfiguration(
+                        is_video_high_speed ?
+                                SessionConfiguration.SESSION_HIGH_SPEED : SessionConfiguration.SESSION_REGULAR,
+                        outputConfigurations,
+                        new CameraTestUtils.HandlerExecutor(mCameraBackgroundHandler),
+                        myStateCallback
+                );
+                if (inputConfiguration != null) {
+                    mSessionConfiguration.setInputConfiguration(inputConfiguration);
                 }
-                catch(NullPointerException e) {
-                    // have had this from some devices on Google Play, from deep within createCaptureSession
-                    // note, we put the catch here rather than below, so as to not mask nullpointerexceptions
-                    // from my code
-                    if( MyDebug.LOG ) {
-                        Log.e(TAG, "NullPointerException trying to create capture session");
-                        Log.e(TAG, "message: " + e.getMessage());
+                mSessionConfiguration.setSessionParameters(mPreviewBuilder.build());
+                mCameraDevice.createCaptureSession(mSessionConfiguration);
+            } else {
+                if (is_video_high_speed) {
+                    mCameraDevice.createConstrainedHighSpeedCaptureSession(surfaces,
+                            myStateCallback,
+                            mCameraBackgroundHandler);
+                } else {
+                    try {
+                        if (mEnablePreviewShareSurface || mUsePreviewDeferredSurface) {
+                            if (inputConfiguration != null) {
+                                mCameraDevice.createReprocessableCaptureSessionByConfigurations(inputConfiguration,
+                                        outputConfigurations,
+                                        myStateCallback,
+                                        mCameraBackgroundHandler);
+                            } else {
+                                mCameraDevice.createCaptureSessionByOutputConfigurations(
+                                        outputConfigurations,
+                                        myStateCallback,
+                                        mCameraBackgroundHandler);
+                            }
+                        } else {
+                            if (inputConfiguration != null) {
+                                ArrayList<Surface> output_surfaces = new ArrayList<>(surfaces);
+                                if (mInputImageReader != null) {
+                                    output_surfaces.add(mInputImageReader.getSurface());
+                                }
+                                mCameraDevice.createReprocessableCaptureSession(
+                                        inputConfiguration,
+                                        output_surfaces,
+                                        myStateCallback,
+                                        mCameraBackgroundHandler
+                                );
+                            } else {
+                                mCameraDevice.createCaptureSession(surfaces,
+                                        myStateCallback,
+                                        mCameraBackgroundHandler);
+                            }
+                        }
+                        is_video_high_speed = false;
                     }
-                    e.printStackTrace();
-                    throw new CameraControllerException();
+                    catch(NullPointerException e) {
+                        // have had this from some devices on Google Play, from deep within createCaptureSession
+                        // note, we put the catch here rather than below, so as to not mask nullpointerexceptions
+                        // from my code
+                        if( MyDebug.LOG ) {
+                            Log.e(TAG, "NullPointerException trying to create capture session");
+                            Log.e(TAG, "message: " + e.getMessage());
+                        }
+                        e.printStackTrace();
+                        throw new CameraControllerException();
+                    }
                 }
             }
+
             if( MyDebug.LOG )
                 Log.i(TAG, "wait until session created...");
             // n.b., we use the background_camera_lock lock instead of a separate lock, so that it's safe to call this
