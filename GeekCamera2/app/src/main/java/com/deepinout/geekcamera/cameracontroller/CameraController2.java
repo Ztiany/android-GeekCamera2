@@ -6,15 +6,18 @@ import com.deepinout.geekcamera.cts.CameraTestUtils;
 import com.deepinout.geekcamera.cts.helpers.StaticMetadata;
 
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.Executors;
+import java.util.Set;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.ImageFormat;
@@ -301,7 +304,44 @@ public class CameraController2 extends CameraController {
     CameraTestUtils.SimpleCaptureCallback mZslResultListener;
     //#### Added For App ZSL(Reprocessable) End
 
-    
+    //Vendor Tag Ops
+    @SuppressLint("NewApi")
+    public static final CameraCharacteristics.Key<Byte[]> mVendorTag_faceLandmark_availableIds =
+            new CameraCharacteristics.Key<>(
+                    "com.google.pixel.experimental2018.faceLandmark.availableIds",
+                    Byte[].class);
+    @SuppressLint("NewApi")
+    public static final CaptureRequest.Key<Byte> mVendorTag_motion_detection_enable =
+            new CaptureRequest.Key<>(
+                    "com.google.pixel.experimental2017.stats.motion_detection_enable",
+                    Byte.class);
+    @SuppressLint("NewApi")
+    public static final CaptureResult.Key<Float> mVendorTag_camera_motion_x =
+            new CaptureResult.Key<>(
+                    "com.google.pixel.experimental2017.stats.camera_motion_x",
+                    Float.class);
+    @SuppressLint("NewApi")
+    public static final CaptureResult.Key<Float> mVendorTag_camera_motion_y =
+            new CaptureResult.Key<>(
+                    "com.google.pixel.experimental2017.stats.camera_motion_y",
+                    Float.class);
+    @SuppressLint("NewApi")
+    public static final CaptureResult.Key<Float> mVendorTag_subject_motion =
+            new CaptureResult.Key<>(
+                    "com.google.pixel.experimental2017.stats.subject_motion",
+                    Float.class);
+    //Vendor Tag Ops END
+
+    //Physical Camera Stream
+    private boolean mEnableCapturePhysicalStream;
+    private boolean mIsLogicalMultiCamera;
+    private String[] mPhysicalCameraIds = null;
+    private android.util.Size mPhysical0JpegSize;
+    private ImageReader mPhysical0ImageReader;
+    private android.util.Size mPhysical1JpegSize;
+    private ImageReader mPhysical1ImageReader;
+    //Physical Camera Stream End
+
     private enum RequestTagType {
         CAPTURE, // request is either for a regular non-burst capture, or the last of a burst capture sequence
         CAPTURE_BURST_IN_PROGRESS // request is for a burst capture, but isn't the last of the burst capture sequence
@@ -1310,7 +1350,7 @@ public class CameraController2 extends CameraController {
         public void onImageAvailable(ImageReader reader) {
             if( MyDebug.LOG )
                 Log.i(TAG, "new still image available");
-            if( picture_cb == null || !jpeg_todo ) {
+            if( picture_cb == null ) {
                 // in theory this shouldn't happen - but if this happens, still free the image to avoid risk of memory leak,
                 // or strange behaviour where an old image appears when the user next takes a photo
                 Log.e(TAG, "no picture callback available");
@@ -1326,6 +1366,10 @@ public class CameraController2 extends CameraController {
             Image image = reader.acquireNextImage();
             if( MyDebug.LOG )
                 Log.i(TAG, "image timestamp: " + image.getTimestamp());
+            if (mEnableCapturePhysicalStream) {
+                Log.i(TAG, "[Physical_Camera] onImageAvailable, timestamp:" + image.getTimestamp() +
+                        ",format:" + image.getFormat());
+            }
             if (mEnableReprocessable) {
                 Log.i(TAG, "[ZSL] onImageAvailable, timestamp:" + image.getTimestamp() +
                                 ",format:" + image.getFormat());
@@ -1966,6 +2010,37 @@ public class CameraController2 extends CameraController {
                 Log.i(TAG, "get camera id list");
             this.cameraIdS = manager.getCameraIdList()[cameraId];
             mStaticMetadata = new StaticMetadata(manager.getCameraCharacteristics(cameraIdS));
+            mIsLogicalMultiCamera = mStaticMetadata.isCapabilitySupported(
+                    CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA);
+            Log.i(TAG, "Physical_Camera mIsLogicalMultiCamera:" + mIsLogicalMultiCamera);
+            if (mIsLogicalMultiCamera) {
+                Set<String> physicalCameraIds = manager.getCameraCharacteristics(cameraIdS).getPhysicalCameraIds();
+                mPhysicalCameraIds = new String[2];
+                if (physicalCameraIds.size() >= 2) {
+                    mEnableCapturePhysicalStream = true;
+                }
+                Log.i(TAG, "Physical_Camera mPhysicalCameraIds:" + physicalCameraIds);
+                int index = 0;
+                for (String physicalCameraId : physicalCameraIds) {
+                    StaticMetadata physicalStaticMetadata =
+                            new StaticMetadata(manager.getCameraCharacteristics(physicalCameraId));
+                    if (index == 0) {
+                        mPhysical0JpegSize = physicalStaticMetadata.getJpegOutputSizesChecked()[0];
+                        mPhysicalCameraIds[0] = physicalCameraId;
+                    }
+                    if (index == 1) {
+                        mPhysical1JpegSize = physicalStaticMetadata.getJpegOutputSizesChecked()[0];
+                        mPhysicalCameraIds[1] = physicalCameraId;
+                    }
+                    index ++;
+                }
+                Log.i(TAG, "Physical_Camera jpeg size, mPhysical0JpegSize:" + mPhysical0JpegSize +
+                            ", mPhysical1JpegSize: " + mPhysical1JpegSize);
+                setupPhysicalCameraStreamImageReader();
+            } else {
+                // disable physical stream in non logical multi-camera
+                mEnableCapturePhysicalStream = false;
+            }
             mIsReprocesableSupport =
                     mStaticMetadata.isCapabilitySupported(
                             CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_YUV_REPROCESSING) ||
@@ -4333,7 +4408,7 @@ public class CameraController2 extends CameraController {
         if( completed ) {
             // need to set picture_cb to null before calling onCompleted, as that may reenter CameraController to take another photo (if in auto-repeat burst mode) - see testTakePhotoRepeat()
             PictureCallback cb = picture_cb;
-            picture_cb = null;
+//            picture_cb = null;
             cb.onCompleted();
             synchronized( background_camera_lock ) {
                 if( burst_type == BurstType.BURSTTYPE_FOCUS )
@@ -5291,6 +5366,12 @@ public class CameraController2 extends CameraController {
             previewIsVideoMode = false;
             mPreviewBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_PREVIEW);
             camera_settings.setupBuilder(mPreviewBuilder, false);
+            if (mStaticMetadata.areRequestKeyAvailable(mVendorTag_motion_detection_enable)) {
+                Log.i(TAG, "VendorTag_OPS " + mVendorTag_motion_detection_enable.toString() + " available.");
+                mPreviewBuilder.set(mVendorTag_motion_detection_enable, (byte)0);
+            } else {
+                Log.i(TAG, "VendorTag_OPS " + mVendorTag_motion_detection_enable.toString() + " not available.");
+            }
             if( MyDebug.LOG )
                 Log.i(TAG, "successfully created preview request");
         }
@@ -5415,6 +5496,20 @@ public class CameraController2 extends CameraController {
         }
     }
 
+    private void setupPhysicalCameraStreamImageReader() {
+        if (mEnableCapturePhysicalStream) {
+            mPhysical0ImageReader = ImageReader.newInstance(mPhysical0JpegSize.getWidth(),
+                    mPhysical0JpegSize.getHeight(), ImageFormat.JPEG, 2);
+            mPhysical0ImageReader.setOnImageAvailableListener(
+                    new OnImageAvailableListener(), mCameraBackgroundHandler);
+            mPhysical1ImageReader = ImageReader.newInstance(mPhysical1JpegSize.getWidth(),
+                    mPhysical1JpegSize.getHeight(), ImageFormat.JPEG, 2);
+            mPhysical1ImageReader.setOnImageAvailableListener(
+                    new OnImageAvailableListener(), mCameraBackgroundHandler);
+        }
+    }
+
+    @SuppressLint("NewApi")
     private void createCaptureSession(final MediaRecorder video_recorder, boolean want_photo_video_recording) throws CameraControllerException {
         if( MyDebug.LOG )
             Log.i(TAG, "create capture session");
@@ -5767,6 +5862,34 @@ public class CameraController2 extends CameraController {
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                if (mEnableCapturePhysicalStream) {
+                    OutputConfiguration physical0OutputConfiguration = new OutputConfiguration(mPhysical0ImageReader.getSurface());
+                    physical0OutputConfiguration.setPhysicalCameraId(mPhysicalCameraIds[0]);
+                    outputConfigurations.add(physical0OutputConfiguration);
+
+                    OutputConfiguration physical1OutputConfiguration = new OutputConfiguration(mPhysical1ImageReader.getSurface());
+                    physical1OutputConfiguration.setPhysicalCameraId(mPhysicalCameraIds[1]);
+                    outputConfigurations.add(physical1OutputConfiguration);
+
+                    mSessionConfiguration = new SessionConfiguration(
+                            is_video_high_speed ?
+                                    SessionConfiguration.SESSION_HIGH_SPEED : SessionConfiguration.SESSION_REGULAR,
+                            outputConfigurations,
+                            new CameraTestUtils.HandlerExecutor(mCameraBackgroundHandler),
+                            myStateCallback
+                    );
+                    if (inputConfiguration != null) {
+                        mSessionConfiguration.setInputConfiguration(inputConfiguration);
+                    }
+                    mSessionConfiguration.setSessionParameters(mPreviewBuilder.build());
+                    if (!mCameraDevice.isSessionConfigurationSupported(mSessionConfiguration)) {
+                        outputConfigurations.remove(physical0OutputConfiguration);
+                        outputConfigurations.remove(physical1OutputConfiguration);
+                        Log.i(TAG, "Physical_Camera session configuration not supported!");
+                        mEnableCapturePhysicalStream = false;
+                    }
+                }
+
                 mSessionConfiguration = new SessionConfiguration(
                         is_video_high_speed ?
                                 SessionConfiguration.SESSION_HIGH_SPEED : SessionConfiguration.SESSION_REGULAR,
@@ -5779,6 +5902,7 @@ public class CameraController2 extends CameraController {
                 }
                 mSessionConfiguration.setSessionParameters(mPreviewBuilder.build());
                 mCameraDevice.createCaptureSession(mSessionConfiguration);
+                Log.i(TAG, "createCaptureSession, size:" + outputConfigurations.size());
             } else {
                 if (is_video_high_speed) {
                     mCameraDevice.createConstrainedHighSpeedCaptureSession(surfaces,
@@ -6411,6 +6535,11 @@ public class CameraController2 extends CameraController {
                 stillBuilder.addTarget(imageReader.getSurface());
                 if( imageReaderRaw != null )
                     stillBuilder.addTarget(imageReaderRaw.getSurface());
+                if (mEnableCapturePhysicalStream) {
+                    Log.i(TAG, "Physical_Camera takepicture with physical stream.");
+                    stillBuilder.addTarget(mPhysical0ImageReader.getSurface());
+                    stillBuilder.addTarget(mPhysical1ImageReader.getSurface());
+                }
 
                 n_burst = 1;
                 n_burst_taken = 0;
@@ -7867,7 +7996,38 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "frame duration: " + request.get(CaptureRequest.SENSOR_FRAME_DURATION));
                 }
             }
-            process(request, result);
+            if ( MyDebug.LOG) {
+                if (mStaticMetadata.areResultKeyAvailable(mVendorTag_camera_motion_x) &&
+                    mStaticMetadata.areResultKeyAvailable(mVendorTag_camera_motion_y) &&
+                    mStaticMetadata.areResultKeyAvailable(mVendorTag_subject_motion)) {
+                    if (result.get(mVendorTag_camera_motion_x) != null &&
+                        result.get(mVendorTag_camera_motion_y) != null&&
+                        result.get(mVendorTag_subject_motion)!= null) {
+                        DecimalFormat decimalFormat = new DecimalFormat("0.00000000");
+                        float x = result.get(mVendorTag_camera_motion_x);
+                        float y = result.get(mVendorTag_camera_motion_y);
+                        float subject_motion = result.get(mVendorTag_subject_motion);
+                        Log.i(TAG, "VendorTag_OPS motion, subject_motion:" + decimalFormat.format(subject_motion) +
+                                ",x:" +  decimalFormat.format(x) +
+                                ",y:" +  decimalFormat.format(y));
+                    }
+                }
+            }
+
+            if (MyDebug.LOG) {
+                Map<String, CaptureResult> physicalCameraResults = result.getPhysicalCameraResults();
+                if (mEnableCapturePhysicalStream &&
+                        physicalCameraResults.get(mPhysicalCameraIds[0]) != null &&
+                        physicalCameraResults.get(mPhysicalCameraIds[1]) != null) {
+                    Log.i(TAG, "Physical_Camera" + mPhysicalCameraIds[0] + "'s result timestamp:" +
+                            physicalCameraResults.get(mPhysicalCameraIds[0]).get(CaptureResult.SENSOR_TIMESTAMP));
+                    Log.i(TAG, "Physical_Camera" + mPhysicalCameraIds[1] + "'s result timestamp:" +
+                            physicalCameraResults.get(mPhysicalCameraIds[1]).get(CaptureResult.SENSOR_TIMESTAMP));
+                }
+            }
+
+
+           process(request, result);
             processCompleted(request, result);
             if (mZslResultListener != null) {
                 mZslResultListener.onCaptureCompleted(session, request, result);

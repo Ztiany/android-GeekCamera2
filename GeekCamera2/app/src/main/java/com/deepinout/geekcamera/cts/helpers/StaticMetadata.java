@@ -2015,6 +2015,16 @@ public class StaticMetadata {
         return mCharacteristics.getAvailableCaptureResultKeys().containsAll(keys);
     }
 
+    public final boolean areResultKeyAvailable(CaptureResult.Key<?> key) {
+        List <CaptureResult.Key<?>> availabeResultKeys = mCharacteristics.getAvailableCaptureResultKeys();
+        for (CaptureResult.Key resultKey : availabeResultKeys) {
+            if (key.getName().equalsIgnoreCase(resultKey.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Determine whether or not all the {@code keys} are available request keys
      * (as in {@link CameraCharacteristics#getAvailableCaptureRequestKeys}.
@@ -2031,6 +2041,16 @@ public class StaticMetadata {
      */
     public final boolean areRequestKeysAvailable(Collection<CaptureRequest.Key<?>> keys) {
         return mCharacteristics.getAvailableCaptureRequestKeys().containsAll(keys);
+    }
+
+    public final boolean areRequestKeyAvailable(CaptureRequest.Key<?> key) {
+        List <CaptureRequest.Key<?>> availabeRequestKeys = mCharacteristics.getAvailableCaptureRequestKeys();
+        for (CaptureRequest.Key requestKey : availabeRequestKeys) {
+            if (key.getName().equalsIgnoreCase(requestKey.getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

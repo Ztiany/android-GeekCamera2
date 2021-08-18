@@ -12,6 +12,7 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.ImageReader;
 import android.media.MediaCodec;
@@ -61,6 +62,9 @@ public class CameraControllerManager2 extends CameraControllerManager {
                     getHardwareLevel(mContext, i);
                     printStreamConfigurationMap(mContext, i);
                     printAvailableSessionKeys(mContext, i);
+                    printAvailableRequestKeys(mContext, i);
+                    printAvailableResultKeys(mContext, i);
+                    printAvailableStaticKeys(mContext, i);
                 }
                 mPrintedInfo = true;
             }
@@ -306,6 +310,63 @@ public class CameraControllerManager2 extends CameraControllerManager {
             List <CaptureRequest.Key<?>> availabeSessionKeys = characteristics.getAvailableSessionKeys();
             for (CaptureRequest.Key sessionKey : availabeSessionKeys) {
                 Log.i(TAG, "cameraId;" + cameraIdS + ", sessionKey name:" + sessionKey.getName());
+            }
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void printAvailableStaticKeys(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            List <CameraCharacteristics.Key<?>> availabeStaticKeys = characteristics.getKeys();
+            for (CameraCharacteristics.Key staticKey : availabeStaticKeys) {
+                Log.i(TAG, "cameraId;" + cameraIdS + ", availabeStaticKeys name:" + staticKey.getName());
+                if (staticKey.getName().equalsIgnoreCase(
+                        CameraController2.mVendorTag_faceLandmark_availableIds.getName())) {
+                    Byte[] faceLandmark_availableIds =
+                            characteristics.get(CameraController2.mVendorTag_faceLandmark_availableIds);
+                    StringBuilder availableIds = new StringBuilder();
+                    for (int i = 0; i < faceLandmark_availableIds.length; i++) {
+                        availableIds.append((int)faceLandmark_availableIds[i] + " ");
+                    }
+                    Log.i(TAG, "cameraIdS:" + cameraIdS +
+                            " VendorTag_OPS " + CameraController2.mVendorTag_faceLandmark_availableIds.getName() +
+                            ", values:" + availableIds.toString());
+                }
+            }
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void printAvailableResultKeys(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            List <CaptureResult.Key<?>> availabeResultKeys = characteristics.getAvailableCaptureResultKeys();
+            for (CaptureResult.Key resultKey : availabeResultKeys) {
+                Log.i(TAG, "cameraId:" + cameraIdS + ", availabeResultKeys name:" + resultKey.getName());
+            }
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void printAvailableRequestKeys(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            List <CaptureRequest.Key<?>> availabeRequestKeys = characteristics.getAvailableCaptureRequestKeys();
+            for (CaptureRequest.Key requestKey : availabeRequestKeys) {
+                Log.i(TAG, "cameraId:" + cameraIdS + ", availabeRequestKeys name:" + requestKey.getName());
+            }
+            List <CaptureRequest.Key<?>> availabePhysicalRequestKeys =
+                    characteristics.getAvailablePhysicalCameraRequestKeys();
+            Log.i(TAG, "cameraId:" + cameraIdS + " Physical_Camera availabePhysicalRequestKeys " + availabePhysicalRequestKeys);
+            for (CaptureRequest.Key requestKey : availabePhysicalRequestKeys) {
+                Log.i(TAG, "cameraId:" + cameraIdS + ", Physical_Camera availabeRequestKeys name:" + requestKey.getName());
             }
         } catch (Exception e) {
 
