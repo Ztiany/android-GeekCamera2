@@ -23,7 +23,7 @@ public class MyUtils {
             if (captureRequest.get(key) instanceof MeteringRectangle[]) {
                 MeteringRectangle[] meteringRectangles = (MeteringRectangle[]) captureRequest.get(key);
                 Log.i(TAG, key.getName() + ":" + meteringRectangles[0].toString() + ",");
-            } else {
+            } else if (captureRequest.get(key) != null){
                 Log.i(TAG, key.getName() + ":" + captureRequest.get(key).toString() + ",");
             }
         }

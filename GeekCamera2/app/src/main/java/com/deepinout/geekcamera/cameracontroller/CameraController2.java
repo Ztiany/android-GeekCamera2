@@ -293,7 +293,7 @@ public class CameraController2 extends CameraController {
 
     //#### Added For App ZSL(Reprocessable)
     private boolean mIsReprocesableSupport;
-    private boolean  mEnableReprocessable= true;
+    private boolean  mEnableReprocessable= false;
     private int mMaxInputStreams = 0;
     private int mInputFormat = ImageFormat.UNKNOWN;
     private android.util.Size mInputSize;
@@ -333,7 +333,8 @@ public class CameraController2 extends CameraController {
     //Vendor Tag Ops END
 
     //Physical Camera Stream
-    private boolean mEnableCapturePhysicalStream;
+    private boolean mCapturePhysicalStream = false;
+    private boolean mEnableCapturePhysicalStream = false;
     private boolean mIsLogicalMultiCamera;
     private String[] mPhysicalCameraIds = null;
     private android.util.Size mPhysical0JpegSize;
@@ -2016,7 +2017,7 @@ public class CameraController2 extends CameraController {
             if (mIsLogicalMultiCamera) {
                 Set<String> physicalCameraIds = manager.getCameraCharacteristics(cameraIdS).getPhysicalCameraIds();
                 mPhysicalCameraIds = new String[2];
-                if (physicalCameraIds.size() >= 2) {
+                if (physicalCameraIds.size() >= 2 && mCapturePhysicalStream) {
                     mEnableCapturePhysicalStream = true;
                 }
                 Log.i(TAG, "Physical_Camera mPhysicalCameraIds:" + physicalCameraIds);
@@ -2187,7 +2188,7 @@ public class CameraController2 extends CameraController {
             Log.i(TAG, "release, id:" + getCameraId(), new Throwable());
         synchronized( background_camera_lock ) {
             if( mCameraCaptureSession != null ) {
-//                captureSession.close();
+//                mCameraCaptureSession.close();
                 mCameraCaptureSession = null;
                 //pending_request_when_ready = null;
             }
@@ -5607,7 +5608,7 @@ public class CameraController2 extends CameraController {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession session) {
                     if( MyDebug.LOG ) {
-                        Log.i(TAG, "onConfigured: " + session);
+                        Log.i(TAG, "[Session_State] onConfigured: " + session);
                         Log.i(TAG, "captureSession was: " + mCameraCaptureSession);
                     }
                     if( mCameraDevice == null ) {
@@ -5662,6 +5663,7 @@ public class CameraController2 extends CameraController {
                         }
                         try {
                             setRepeatingRequest();
+                            mCameraCaptureSession.prepare(imageReader.getSurface());
                         }
                         catch(CameraAccessException e) {
                             if( MyDebug.LOG ) {
@@ -5684,13 +5686,43 @@ public class CameraController2 extends CameraController {
                 @Override
                 public void onConfigureFailed(@NonNull CameraCaptureSession session) {
                     if( MyDebug.LOG ) {
-                        Log.e(TAG, "onConfigureFailed: " + session);
+                        Log.i(TAG, "[Session_State] onConfigureFailed: " + session);
                     }
                     synchronized( background_camera_lock ) {
                         callback_done = true;
                         background_camera_lock.notifyAll();
                     }
                     // don't throw CameraControllerException here, as won't be caught - instead we throw CameraControllerException below
+                }
+
+                @Override
+                public void onActive(@NonNull CameraCaptureSession session) {
+                    super.onActive(session);
+                    Log.i(TAG, "[Session_State] onActive :" + session);
+                }
+
+                @Override
+                public void onReady(@NonNull CameraCaptureSession session) {
+                    super.onReady(session);
+                    Log.i(TAG, "[Session_State] onReady :" + session);
+                }
+
+                @Override
+                public void onCaptureQueueEmpty(@NonNull CameraCaptureSession session) {
+                    super.onCaptureQueueEmpty(session);
+                    Log.i(TAG, "[Session_State] onCaptureQueueEmpty :" + session);
+                }
+
+                @Override
+                public void onClosed(@NonNull CameraCaptureSession session) {
+                    super.onClosed(session);
+                    Log.i(TAG, "[Session_State] onClosed :" + session);
+                }
+
+                @Override
+                public void onSurfacePrepared(@NonNull CameraCaptureSession session, @NonNull Surface surface) {
+                    super.onSurfacePrepared(session, surface);
+                    Log.i(TAG, "[Session_State] onSurfacePrepared :" + session);
                 }
 
                 /*@Override
