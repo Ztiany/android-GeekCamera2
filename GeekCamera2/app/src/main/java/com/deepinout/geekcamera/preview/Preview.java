@@ -2027,19 +2027,22 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 
     public void setupBurstMode() {
         if( MyDebug.LOG )
-            Log.d(TAG, "setupBurstMode()");
+            Log.d(TAG, "[CS] setupBurstMode()");
         if( this.supports_expo_bracketing && applicationInterface.isExpoBracketingPref() ) {
+            Log.i(TAG, "[CS] setupBurstMode setBurstType:" + CameraController.BurstType.BURSTTYPE_EXPO);
             mCameraController.setBurstType(CameraController.BurstType.BURSTTYPE_EXPO);
             mCameraController.setExpoBracketingNImages( applicationInterface.getExpoBracketingNImagesPref() );
             mCameraController.setExpoBracketingStops( applicationInterface.getExpoBracketingStopsPref() );
             // setUseExpoFastBurst called when taking a photo
         }
         else if( this.supports_focus_bracketing && applicationInterface.isFocusBracketingPref() ) {
+            Log.i(TAG, "[CS] setupBurstMode setBurstType:" + CameraController.BurstType.BURSTTYPE_FOCUS);
             mCameraController.setBurstType(CameraController.BurstType.BURSTTYPE_FOCUS);
             mCameraController.setFocusBracketingNImages( applicationInterface.getFocusBracketingNImagesPref() );
             mCameraController.setFocusBracketingAddInfinity( applicationInterface.getFocusBracketingAddInfinityPref() );
         }
         else if( this.supports_burst && applicationInterface.isCameraBurstPref() ) {
+            Log.i(TAG, "[CS] setupBurstMode setBurstType:" + CameraController.BurstType.BURSTTYPE_NORMAL);
             if( applicationInterface.getBurstForNoiseReduction() ) {
                 if( this.supports_exposure_time ) { // noise reduction mode also needs manual exposure
                     ApplicationInterface.NRModePref nr_mode = applicationInterface.getNRModePref();
@@ -2057,6 +2060,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             }
         }
         else {
+            Log.i(TAG, "[CS] setupBurstMode setBurstType:" + CameraController.BurstType.BURSTTYPE_NONE);
             mCameraController.setBurstType(CameraController.BurstType.BURSTTYPE_NONE);
         }
     }

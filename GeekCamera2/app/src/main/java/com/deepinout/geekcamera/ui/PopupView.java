@@ -180,8 +180,8 @@ public class PopupView extends LinearLayout {
 
             SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(main_activity);
 
-            //final boolean use_expanded_menu = true;
-            final boolean use_expanded_menu = false;
+            final boolean use_expanded_menu = true;
+//            final boolean use_expanded_menu = false;
             final List<String> photo_modes = new ArrayList<>();
             final List<MyApplicationInterface.PhotoMode> photo_mode_values = new ArrayList<>();
             photo_modes.add( getResources().getString(use_expanded_menu ? R.string.photo_mode_standard_full : R.string.photo_mode_standard) );

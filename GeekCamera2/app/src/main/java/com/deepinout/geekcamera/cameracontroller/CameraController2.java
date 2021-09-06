@@ -1385,7 +1385,7 @@ public class CameraController2 extends CameraController {
             synchronized( background_camera_lock ) {
                 n_burst_taken++;
                 if( MyDebug.LOG ) {
-                    Log.i(TAG, "n_burst_taken is now: " + n_burst_taken);
+                    Log.i(TAG, "[CS] n_burst_taken is now: " + n_burst_taken);
                     Log.i(TAG, "n_burst: " + n_burst);
                     Log.i(TAG, "burst_single_request: " + burst_single_request);
                 }
@@ -1478,7 +1478,8 @@ public class CameraController2 extends CameraController {
                     if( burst_type != BurstType.BURSTTYPE_FOCUS ) {
                         try {
                             if( mCameraDevice != null && mCameraCaptureSession != null ) { // make sure camera wasn't released in the meantime
-                                mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, mCameraBackgroundHandler);
+                                int sequenceId = mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, mCameraBackgroundHandler);
+                                Log.i(TAG, "[create_sequence] takePhotoPartial capture sequenceId:" + sequenceId);
                             }
                         }
                         catch(CameraAccessException e) {
@@ -1575,7 +1576,8 @@ public class CameraController2 extends CameraController {
 
                                         playSound(MediaActionSound.SHUTTER_CLICK);
                                         try {
-                                            mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, mCameraBackgroundHandler);
+                                            int sequenceId = mCameraCaptureSession.capture(slow_burst_capture_requests.get(n_burst_taken), previewCaptureCallback, mCameraBackgroundHandler);
+                                            Log.i(TAG, "[CS][create_sequence] takePhotoPartial capture sequenceId:" + sequenceId);
                                         }
                                         catch(CameraAccessException e) {
                                             if( MyDebug.LOG ) {
@@ -5321,7 +5323,8 @@ public class CameraController2 extends CameraController {
                     captureSessionHighSpeed.setRepeatingBurst(mPreviewBuilderBurst, previewCaptureCallback, mCameraBackgroundHandler);
                 }
                 else {
-                    mCameraCaptureSession.setRepeatingRequest(request, previewCaptureCallback, mCameraBackgroundHandler);
+                    int sequenceId = mCameraCaptureSession.setRepeatingRequest(request, previewCaptureCallback, mCameraBackgroundHandler);
+                    Log.i(TAG, "[create_sequence] setRepeatingRequest setRepeatingRequest sequenceId:" + sequenceId);
                 }
                 if( MyDebug.LOG )
                     Log.i(TAG, "setRepeatingRequest done");
@@ -5348,7 +5351,8 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "no camera or capture session");
                 return;
             }
-            mCameraCaptureSession.capture(request, previewCaptureCallback, mCameraBackgroundHandler);
+            int sequenceId = mCameraCaptureSession.capture(request, previewCaptureCallback, mCameraBackgroundHandler);
+            Log.i(TAG, "[create_sequence] capture capture sequenceId:" + sequenceId);
         }
     }
 
@@ -6460,7 +6464,7 @@ public class CameraController2 extends CameraController {
 
     private void takePictureAfterPrecapture() {
         if( MyDebug.LOG )
-            Log.i(TAG, "takePictureAfterPrecapture");
+            Log.i(TAG, "[CS] takePictureAfterPrecapture");
         long debug_time = 0;
         if( MyDebug.LOG ) {
             debug_time = System.currentTimeMillis();
@@ -6471,14 +6475,14 @@ public class CameraController2 extends CameraController {
             if( burst_type == BurstType.BURSTTYPE_EXPO || burst_type == BurstType.BURSTTYPE_FOCUS ) {
                 takePictureBurstBracketing();
                 if( MyDebug.LOG ) {
-                    Log.i(TAG, "takePictureAfterPrecapture() took: " + (System.currentTimeMillis() - debug_time));
+                    Log.i(TAG, "[CS] takePictureAfterPrecapture takePictureBurstBracketing took: " + (System.currentTimeMillis() - debug_time));
                 }
                 return;
             }
             else if( burst_type == BurstType.BURSTTYPE_NORMAL || burst_type == BurstType.BURSTTYPE_CONTINUOUS ) {
                 takePictureBurst(false);
                 if( MyDebug.LOG ) {
-                    Log.i(TAG, "takePictureAfterPrecapture() took: " + (System.currentTimeMillis() - debug_time));
+                    Log.i(TAG, "[CS] takePictureAfterPrecapture takePictureBurst took: " + (System.currentTimeMillis() - debug_time));
                 }
                 return;
             }
@@ -6646,7 +6650,8 @@ public class CameraController2 extends CameraController {
                     if( MyDebug.LOG )
                         Log.i(TAG, "capture with stillBuilder");
                     //pending_request_when_ready = stillBuilder.build();
-                    mCameraCaptureSession.capture(stillBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
+                    int sequenceId = mCameraCaptureSession.capture(stillBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
+                    Log.i(TAG, "[create_sequence] takePictureAfterPrecapture capture sequenceId:" + sequenceId);
                     //captureSession.capture(stillBuilder.build(), new CameraCaptureSession.CaptureCallback() {
                     //}, handler);
                     playSound(MediaActionSound.SHUTTER_CLICK); // play shutter sound asap, otherwise user has the illusion of being slow to take photos
@@ -6782,145 +6787,142 @@ public class CameraController2 extends CameraController {
                     stillBuilder.addTarget(imageReaderRaw.getSurface());
 
                 if( burst_type == BurstType.BURSTTYPE_EXPO ) {
-
-                if( MyDebug.LOG )
-                    Log.i(TAG, "expo bracketing");
-
-                /*stillBuilder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON);
-                stillBuilder.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_OFF);
-
-                stillBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, -6);
-                requests.add( stillBuilder.build() );
-                stillBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
-                requests.add( stillBuilder.build() );
-                stillBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 6);
-                requests.add( stillBuilder.build() );*/
-
-                stillBuilder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF);
-                if( use_fake_precapture_mode && fake_precapture_torch_performed ) {
                     if( MyDebug.LOG )
-                        Log.i(TAG, "setting torch for capture");
-                    stillBuilder.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_TORCH);
-                    test_fake_flash_photo++;
-                }
-                // else don't turn torch off, as user may be in torch on mode
+                        Log.i(TAG, "[CS]expo bracketing");
 
-                Range<Integer> iso_range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE); // may be null on some devices
-                if( iso_range == null ) {
-                    Log.e(TAG, "takePictureBurstBracketing called but null iso_range");
-                }
-                else {
-                    // set ISO
-                    int iso = 800;
-                    // obtain current ISO/etc settings from the capture result - but if we're in manual ISO mode,
-                    // might as well use the settings the user has actually requested (also useful for workaround for
-                    // OnePlus 3T bug where the reported ISO and exposure_time are wrong in dark scenes)
+                    /*stillBuilder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON);
+                    stillBuilder.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_OFF);
+
+                    stillBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, -6);
+                    requests.add( stillBuilder.build() );
+                    stillBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+                    requests.add( stillBuilder.build() );
+                    stillBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 6);
+                    requests.add( stillBuilder.build() );*/
+
+                    stillBuilder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF);
+                    if( use_fake_precapture_mode && fake_precapture_torch_performed ) {
+                        if( MyDebug.LOG )
+                            Log.i(TAG, "setting torch for capture");
+                        stillBuilder.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_TORCH);
+                        test_fake_flash_photo++;
+                    }
+                    // else don't turn torch off, as user may be in torch on mode
+
+                    Range<Integer> iso_range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE); // may be null on some devices
+                    if( iso_range == null ) {
+                        Log.e(TAG, "takePictureBurstBracketing called but null iso_range");
+                    }
+                    else {
+                        // set ISO
+                        int iso = 800;
+                        // obtain current ISO/etc settings from the capture result - but if we're in manual ISO mode,
+                        // might as well use the settings the user has actually requested (also useful for workaround for
+                        // OnePlus 3T bug where the reported ISO and exposure_time are wrong in dark scenes)
+                        if( camera_settings.has_iso )
+                            iso = camera_settings.iso;
+                        else if( capture_result_has_iso )
+                            iso = capture_result_iso;
+                        // see https://sourceforge.net/p/opencamera/tickets/321/ - some devices may have auto ISO that's
+                        // outside of the allowed manual iso range!
+                        iso = Math.max(iso, iso_range.getLower());
+                        iso = Math.min(iso, iso_range.getUpper());
+                        stillBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso );
+                    }
+                    if( capture_result_has_frame_duration  )
+                        stillBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, capture_result_frame_duration);
+                    else
+                        stillBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, 1000000000L/30);
+
+                    long base_exposure_time = 1000000000L/30;
                     if( camera_settings.has_iso )
-                        iso = camera_settings.iso;
-                    else if( capture_result_has_iso )
-                        iso = capture_result_iso;
-                    // see https://sourceforge.net/p/opencamera/tickets/321/ - some devices may have auto ISO that's
-                    // outside of the allowed manual iso range!
-                    iso = Math.max(iso, iso_range.getLower());
-                    iso = Math.min(iso, iso_range.getUpper());
-                    stillBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso );
-                }
-                if( capture_result_has_frame_duration  )
-                    stillBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, capture_result_frame_duration);
-                else
-                    stillBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, 1000000000L/30);
+                        base_exposure_time = camera_settings.exposure_time;
+                    else if( capture_result_has_exposure_time )
+                        base_exposure_time = capture_result_exposure_time;
 
-                long base_exposure_time = 1000000000L/30;
-                if( camera_settings.has_iso )
-                    base_exposure_time = camera_settings.exposure_time;
-                else if( capture_result_has_exposure_time )
-                    base_exposure_time = capture_result_exposure_time;
-
-                int n_half_images = expo_bracketing_n_images/2;
-                long min_exposure_time = base_exposure_time;
-                long max_exposure_time = base_exposure_time;
-                final double scale = Math.pow(2.0, expo_bracketing_stops/(double)n_half_images);
-                Range<Long> exposure_time_range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE); // may be null on some devices
-                if( exposure_time_range != null ) {
-                    min_exposure_time = exposure_time_range.getLower();
-                    max_exposure_time = exposure_time_range.getUpper();
-                }
-
-                if( MyDebug.LOG ) {
-                    Log.i(TAG, "taking expo bracketing with n_images: " + expo_bracketing_n_images);
-                    Log.i(TAG, "ISO: " + stillBuilder.get(CaptureRequest.SENSOR_SENSITIVITY));
-                    Log.i(TAG, "Frame duration: " + stillBuilder.get(CaptureRequest.SENSOR_FRAME_DURATION));
-                    Log.i(TAG, "Base exposure time: " + base_exposure_time);
-                    Log.i(TAG, "Min exposure time: " + min_exposure_time);
-                    Log.i(TAG, "Max exposure time: " + max_exposure_time);
-                }
-
-                // darker images
-                for(int i=0;i<n_half_images;i++) {
-                    long exposure_time = base_exposure_time;
+                    int n_half_images = expo_bracketing_n_images/2;
+                    long min_exposure_time = base_exposure_time;
+                    long max_exposure_time = base_exposure_time;
+                    final double scale = Math.pow(2.0, expo_bracketing_stops/(double)n_half_images);
+                    Range<Long> exposure_time_range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE); // may be null on some devices
                     if( exposure_time_range != null ) {
-                        double this_scale = scale;
-                        for(int j=i;j<n_half_images-1;j++)
-                            this_scale *= scale;
-                        exposure_time /= this_scale;
-                        if( exposure_time < min_exposure_time )
-                            exposure_time = min_exposure_time;
-                        if( MyDebug.LOG ) {
-                            Log.i(TAG, "add burst request for " + i + "th dark image:");
-                            Log.i(TAG, "    this_scale: " + this_scale);
-                            Log.i(TAG, "    exposure_time: " + exposure_time);
-                        }
-                        stillBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposure_time);
-                        stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE_BURST_IN_PROGRESS));
-                        requests.add( stillBuilder.build() );
+                        min_exposure_time = exposure_time_range.getLower();
+                        max_exposure_time = exposure_time_range.getUpper();
                     }
-                }
 
-                // base image
-                if( MyDebug.LOG )
-                    Log.i(TAG, "add burst request for base image");
-                stillBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, base_exposure_time);
-                stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE_BURST_IN_PROGRESS));
-                requests.add( stillBuilder.build() );
+                    if( MyDebug.LOG ) {
+                        Log.i(TAG, "taking expo bracketing with n_images: " + expo_bracketing_n_images);
+                        Log.i(TAG, "ISO: " + stillBuilder.get(CaptureRequest.SENSOR_SENSITIVITY));
+                        Log.i(TAG, "Frame duration: " + stillBuilder.get(CaptureRequest.SENSOR_FRAME_DURATION));
+                        Log.i(TAG, "Base exposure time: " + base_exposure_time);
+                        Log.i(TAG, "Min exposure time: " + min_exposure_time);
+                        Log.i(TAG, "Max exposure time: " + max_exposure_time);
+                    }
 
-                // lighter images
-                for(int i=0;i<n_half_images;i++) {
-                    long exposure_time = base_exposure_time;
-                    if( exposure_time_range != null ) {
-                        double this_scale = scale;
-                        for(int j=0;j<i;j++)
-                            this_scale *= scale;
-                        exposure_time *= this_scale;
-                        if( exposure_time > max_exposure_time )
-                            exposure_time = max_exposure_time;
-                        if( MyDebug.LOG ) {
-                            Log.i(TAG, "add burst request for " + i + "th light image:");
-                            Log.i(TAG, "    this_scale: " + this_scale);
-                            Log.i(TAG, "    exposure_time: " + exposure_time);
-                        }
-                        stillBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposure_time);
-                        if( i == n_half_images - 1 ) {
-                            // RequestTagType.CAPTURE should only be set for the last request, otherwise we'll may do things like turning
-                            // off torch (for fake flash) before all images are received
-                            // More generally, doesn't seem a good idea to be doing the post-capture commands (resetting ae state etc)
-                            // multiple times, and before all captures are complete!
-                            if( MyDebug.LOG )
-                                Log.i(TAG, "set RequestTagType.CAPTURE for last burst request");
-                            stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE));
-                        }
-                        else {
+                    // darker images
+                    for(int i=0;i<n_half_images;i++) {
+                        long exposure_time = base_exposure_time;
+                        if( exposure_time_range != null ) {
+                            double this_scale = scale;
+                            for(int j=i;j<n_half_images-1;j++)
+                                this_scale *= scale;
+                            exposure_time /= this_scale;
+                            if( exposure_time < min_exposure_time )
+                                exposure_time = min_exposure_time;
+                            if( MyDebug.LOG ) {
+                                Log.i(TAG, "add burst request for " + i + "th dark image:");
+                                Log.i(TAG, "    this_scale: " + this_scale);
+                                Log.i(TAG, "    exposure_time: " + exposure_time);
+                            }
+                            stillBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposure_time);
                             stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE_BURST_IN_PROGRESS));
+                            requests.add( stillBuilder.build() );
                         }
-                        requests.add( stillBuilder.build() );
                     }
-                }
 
-                burst_single_request = true;
-                }
-                else {
-                    // BURSTTYPE_FOCUS
+                    // base image
                     if( MyDebug.LOG )
-                        Log.i(TAG, "focus bracketing");
+                        Log.i(TAG, "add burst request for base image");
+                    stillBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, base_exposure_time);
+                    stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE_BURST_IN_PROGRESS));
+                    requests.add( stillBuilder.build() );
+
+                    // lighter images
+                    for(int i=0;i<n_half_images;i++) {
+                        long exposure_time = base_exposure_time;
+                        if( exposure_time_range != null ) {
+                            double this_scale = scale;
+                            for(int j=0;j<i;j++)
+                                this_scale *= scale;
+                            exposure_time *= this_scale;
+                            if( exposure_time > max_exposure_time )
+                                exposure_time = max_exposure_time;
+                            if( MyDebug.LOG ) {
+                                Log.i(TAG, "add burst request for " + i + "th light image:");
+                                Log.i(TAG, "    this_scale: " + this_scale);
+                                Log.i(TAG, "    exposure_time: " + exposure_time);
+                            }
+                            stillBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposure_time);
+                            if( i == n_half_images - 1 ) {
+                                // RequestTagType.CAPTURE should only be set for the last request, otherwise we'll may do things like turning
+                                // off torch (for fake flash) before all images are received
+                                // More generally, doesn't seem a good idea to be doing the post-capture commands (resetting ae state etc)
+                                // multiple times, and before all captures are complete!
+                                if( MyDebug.LOG )
+                                    Log.i(TAG, "set RequestTagType.CAPTURE for last burst request");
+                                stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE));
+                            }
+                            else {
+                                stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE_BURST_IN_PROGRESS));
+                            }
+                            requests.add( stillBuilder.build() );
+                        }
+                    }
+
+                    burst_single_request = true;
+                } else { // BURSTTYPE_FOCUS
+                    if( MyDebug.LOG )
+                        Log.i(TAG, "[CS] focus bracketing");
 
                     if( use_fake_precapture_mode && fake_precapture_torch_performed ) {
                         if( MyDebug.LOG )
@@ -6961,7 +6963,7 @@ public class CameraController2 extends CameraController {
                             //stillBuilder.setTag(new RequestTagObject(RequestTagType.NONE));
                             stillBuilder.setTag(new RequestTagObject(RequestTagType.CAPTURE_BURST_IN_PROGRESS));
                         }
-                        requests.add( stillBuilder.build() );
+                        requests.add(stillBuilder.build());
 
                         focus_bracketing_in_progress = true;
                     }
@@ -6991,7 +6993,7 @@ public class CameraController2 extends CameraController {
                 n_burst_taken = 0;
                 n_burst_raw = raw_todo ? n_burst : 0;
                 if( MyDebug.LOG ) {
-                    Log.i(TAG, "n_burst: " + n_burst);
+                    Log.i(TAG, "[CS] n_burst: " + n_burst);
                     Log.i(TAG, "burst_single_request: " + burst_single_request);
                 }
 
@@ -7042,17 +7044,17 @@ public class CameraController2 extends CameraController {
                     modified_from_camera_settings = true;
                     if( use_expo_fast_burst && burst_type == BurstType.BURSTTYPE_EXPO ) { // alway use slow burst for focus bracketing
                         if( MyDebug.LOG )
-                            Log.i(TAG, "using fast burst");
+                            Log.i(TAG, "[CS]using fast burst");
                         int sequenceId = mCameraCaptureSession.captureBurst(requests, previewCaptureCallback, mCameraBackgroundHandler);
                         if( MyDebug.LOG )
-                            Log.i(TAG, "sequenceId: " + sequenceId);
-                    }
-                    else {
+                            Log.i(TAG, "[CS][create_sequence] takePictureBurstBracketing captureBurst sequenceId:" + sequenceId);
+                    } else {
                         if( MyDebug.LOG )
                             Log.i(TAG, "using slow burst");
                         slow_burst_capture_requests = requests;
                         slow_burst_start_ms = System.currentTimeMillis();
-                        mCameraCaptureSession.capture(requests.get(0), previewCaptureCallback, mCameraBackgroundHandler);
+                        int sequenceId = mCameraCaptureSession.capture(requests.get(0), previewCaptureCallback, mCameraBackgroundHandler);
+                        Log.i(TAG, "[CS][create_sequence] takePictureBurstBracketing capture sequenceId:" + sequenceId);
                     }
 
                     playSound(MediaActionSound.SHUTTER_CLICK); // play shutter sound asap, otherwise user has the illusion of being slow to take photos
@@ -7093,7 +7095,7 @@ public class CameraController2 extends CameraController {
 
     private void takePictureBurst(boolean continuing_fast_burst) {
         if( MyDebug.LOG )
-            Log.i(TAG, "takePictureBurst");
+            Log.i(TAG, "takePictureBurst continuing_fast_burst:" + continuing_fast_burst);
         if( burst_type != BurstType.BURSTTYPE_NORMAL && burst_type != BurstType.BURSTTYPE_CONTINUOUS ) {
             Log.e(TAG, "takePictureBurstBracketing called but unexpected burst_type: " + burst_type);
         }
@@ -7291,7 +7293,8 @@ public class CameraController2 extends CameraController {
                                 Log.i(TAG, "    last continuous capture");
                         }
                         continuous_burst_requested_last_capture = !continuous_burst_in_progress;
-                        mCameraCaptureSession.capture(continuous_burst_in_progress ? request : last_request, previewCaptureCallback, mCameraBackgroundHandler);
+                        int sequenceId = mCameraCaptureSession.capture(continuous_burst_in_progress ? request : last_request, previewCaptureCallback, mCameraBackgroundHandler);
+                        Log.i(TAG, "[create_sequence] takePictureBurst BURSTTYPE_CONTINUOUS capture sequenceId:" + sequenceId);
 
                         if( continuous_burst_in_progress ) {
                             final int continuous_burst_rate_ms = 100;
@@ -7336,10 +7339,10 @@ public class CameraController2 extends CameraController {
                             requests.add(request);
                         requests.add(last_request);
                         if( MyDebug.LOG )
-                            Log.i(TAG, "captureBurst");
+                            Log.i(TAG, "[CS] captureBurst n_burst:" + n_burst);
                         int sequenceId = mCameraCaptureSession.captureBurst(requests, previewCaptureCallback, mCameraBackgroundHandler);
                         if( MyDebug.LOG )
-                            Log.i(TAG, "sequenceId: " + sequenceId);
+                            Log.i(TAG, "[create_sequence][CS] takePictureBurst use_burst captureBurst sequenceId:" + sequenceId);
                     }
                     else {
                         final int burst_delay = 100;
@@ -7366,7 +7369,8 @@ public class CameraController2 extends CameraController {
                                         return;
                                     }
                                     try {
-                                        mCameraCaptureSession.capture(n_remaining == 1 ? last_request_f : request_f, previewCaptureCallback, mCameraBackgroundHandler);
+                                        int sequenceId = mCameraCaptureSession.capture(n_remaining == 1 ? last_request_f : request_f, previewCaptureCallback, mCameraBackgroundHandler);
+                                        Log.i(TAG, "[create_sequence] takePictureBurst capture sequenceId:" + sequenceId);
                                         n_remaining--;
                                         if( MyDebug.LOG )
                                             Log.i(TAG, "takePictureBurst n_remaining: " + n_remaining);
@@ -7458,12 +7462,15 @@ public class CameraController2 extends CameraController {
                 // first set precapture to idle - this is needed, otherwise we hang in state STATE_WAITING_PRECAPTURE_START, because precapture already occurred whilst autofocusing, and it doesn't occur again unless we first set the precapture trigger to idle
                 if( MyDebug.LOG )
                     Log.i(TAG, "capture with precaptureBuilder");
-                mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
-                mCameraCaptureSession.setRepeatingRequest(precaptureBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
+                int sequenceId = mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
+                Log.i(TAG, "[create_sequence] runPrecapture capture sequenceId:" + sequenceId);
+                sequenceId = mCameraCaptureSession.setRepeatingRequest(precaptureBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
+                Log.i(TAG, "[create_sequence] runPrecapture setRepeatingRequest sequenceId:" + sequenceId);
 
                 // now set precapture
                 precaptureBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CameraMetadata.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-                mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
+                sequenceId = mCameraCaptureSession.capture(precaptureBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
+                Log.i(TAG, "[create_sequence] runPrecapture capture sequenceId:" + sequenceId);
             }
             catch(CameraAccessException e) {
                 if( MyDebug.LOG ) {
@@ -7938,6 +7945,10 @@ public class CameraController2 extends CameraController {
         public void onCaptureBufferLost(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull Surface target, long frameNumber) {
             if( MyDebug.LOG )
                 Log.i(TAG, "onCaptureBufferLost: " + frameNumber);
+            if(getRequestTagType(request) == RequestTagType.CAPTURE ) {
+                Log.i(TAG, "[Capture_Callback] onCaptureBufferLost target:" + target +
+                        ", frameNumber:" + frameNumber);
+            }
             if (mZslResultListener != null) {
                 mZslResultListener.onCaptureBufferLost(session, request, target, frameNumber);
             }
@@ -7952,6 +7963,10 @@ public class CameraController2 extends CameraController {
                 Log.i(TAG, "was image captured?: " + failure.wasImageCaptured());
                 Log.i(TAG, "sequenceId: " + failure.getSequenceId());
             }
+            if(getRequestTagType(request) == RequestTagType.CAPTURE ) {
+                Log.i(TAG, "[Capture_Callback] onCaptureFailed wasImageCaptured:" + failure.wasImageCaptured() +
+                        ", frameNumber:" + failure.getFrameNumber());
+            }
             if (mZslResultListener != null) {
                 mZslResultListener.onCaptureFailed(session, request, failure);
             }
@@ -7964,6 +7979,7 @@ public class CameraController2 extends CameraController {
                 Log.i(TAG, "onCaptureSequenceAborted");
                 Log.i(TAG, "sequenceId: " + sequenceId);
             }
+            Log.i(TAG, "[Capture_Callback] onCaptureSequenceAborted sequenceId:" + sequenceId);
             if (mZslResultListener != null) {
                 mZslResultListener.onCaptureSequenceAborted(session, sequenceId);
             }
@@ -7977,6 +7993,7 @@ public class CameraController2 extends CameraController {
                 Log.i(TAG, "sequenceId: " + sequenceId);
                 Log.i(TAG, "frameNumber: " + frameNumber);
             }
+            Log.i(TAG, "[CS][Capture_Callback] onCaptureSequenceCompleted sequenceId:" + sequenceId);
             if (mZslResultListener != null) {
                 mZslResultListener.onCaptureSequenceCompleted(session, sequenceId, frameNumber);
             }
@@ -7992,6 +8009,9 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "exposure time: " + request.get(CaptureRequest.SENSOR_EXPOSURE_TIME));
                 }
             }
+            if(getRequestTagType(request) == RequestTagType.CAPTURE ) {
+                Log.i(TAG, "[Capture_Callback] onCaptureStarted timestamp:" + timestamp);
+            }
             if (mZslResultListener != null) {
                 mZslResultListener.onCaptureStarted(session, request, timestamp, frameNumber);
             }
@@ -8002,6 +8022,9 @@ public class CameraController2 extends CameraController {
 
         @Override
         public void onCaptureProgressed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull CaptureResult partialResult) {
+            if(getRequestTagType(request) == RequestTagType.CAPTURE ) {
+                Log.i(TAG, "[Capture_Callback] onCaptureProgressed partialResult:" + partialResult);
+            }
             /*if( MyDebug.LOG )
                 Log.i(TAG, "onCaptureProgressed");*/
             //process(request, partialResult);
@@ -8027,6 +8050,9 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "exposure time: " + request.get(CaptureRequest.SENSOR_EXPOSURE_TIME));
                     Log.i(TAG, "frame duration: " + request.get(CaptureRequest.SENSOR_FRAME_DURATION));
                 }
+            }
+            if(getRequestTagType(request) == RequestTagType.CAPTURE ) {
+                Log.i(TAG, "[Capture_Callback] onCaptureCompleted timestamp:" + result.get(CaptureResult.SENSOR_TIMESTAMP));
             }
             if ( MyDebug.LOG) {
                 if (mStaticMetadata.areResultKeyAvailable(mVendorTag_camera_motion_x) &&
