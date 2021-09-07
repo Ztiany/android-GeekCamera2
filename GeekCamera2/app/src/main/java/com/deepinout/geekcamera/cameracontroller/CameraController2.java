@@ -2573,7 +2573,7 @@ public class CameraController2 extends CameraController {
             Log.i(TAG, "capabilities_manual_post_processing?: " + capabilities_manual_post_processing);
             Log.i(TAG, "capabilities_raw?: " + capabilities_raw);
             Log.i(TAG, "supports_burst?: " + camera_features.supports_burst);
-            Log.i(TAG, "capabilities_high_speed_video?: " + capabilities_high_speed_video);
+            Log.i(TAG, "[Slow_Motion] capabilities_high_speed_video?: " + capabilities_high_speed_video);
         }
 
         StreamConfigurationMap configs;
@@ -2998,7 +2998,7 @@ public class CameraController2 extends CameraController {
         }
         Collections.sort(hs_fps_ranges, new CameraController.RangeSorter());
         if( MyDebug.LOG ) {
-            Log.i(TAG, "Supported high speed video fps ranges: ");
+            Log.i(TAG, "[Slow_Motion] Supported high speed video fps ranges: ");
             for (int[] f : hs_fps_ranges) {
                 Log.i(TAG, "   hs range: [" + f[0] + "-" + f[1] + "]");
             }
@@ -5642,17 +5642,20 @@ public class CameraController2 extends CameraController {
                             }
                         }
                         mPreviewBuilder.addTarget(surface);
+                        Log.i(TAG, "mPreviewBuilder preview addTarget:" + surface);
                         if( video_recorder != null ) {
                             if( MyDebug.LOG ) {
                                 Log.i(TAG, "add video recorder surface to previewBuilder: " + video_recorder_surface);
                             }
                             mPreviewBuilder.addTarget(video_recorder_surface);
+                            Log.i(TAG, "mPreviewBuilder recorder addTarget:" + video_recorder_surface);
                         }
                         if (mEnablePreviewShareSurface) {
                             mPreviewOutputConfiguration.addSurface(mPreviewImageReader.getSurface());
                             try {
                                 mCameraCaptureSession.updateOutputConfiguration(mPreviewOutputConfiguration);
                                 mPreviewBuilder.addTarget(mPreviewImageReader.getSurface());
+                                Log.i(TAG, "mPreviewBuilder preview image reader addTarget:" + mPreviewImageReader.getSurface());
                             } catch (Exception e) {
                                 Log.e(TAG, "updateOutputConfiguration with exception:" + e.toString());
                             }
@@ -5664,10 +5667,13 @@ public class CameraController2 extends CameraController {
                             );
                             mInputImageWriterListener = new CameraTestUtils.SimpleImageWriterListener(mInputImageWriter);
                             mPreviewBuilder.addTarget(mInputImageReader.getSurface());
+                            Log.i(TAG, "mPreviewBuilder mInputImageReader addTarget:" + mInputImageReader.getSurface());
                         }
                         try {
                             setRepeatingRequest();
-                            mCameraCaptureSession.prepare(imageReader.getSurface());
+                            if (!want_video_high_speed) {
+                                mCameraCaptureSession.prepare(imageReader.getSurface());
+                            }
                         }
                         catch(CameraAccessException e) {
                             if( MyDebug.LOG ) {
@@ -5825,6 +5831,7 @@ public class CameraController2 extends CameraController {
                     // but if ever this is changed, can only support the preview_surface as a target
                     if (!mUsePreviewDeferredSurface && !mEnablePreviewShareSurface) {
                         surfaces = Collections.singletonList(preview_surface);
+                        mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
                     } else {
                         if (preview_surface != null) {
                             mPreviewOutputConfiguration = new OutputConfiguration(preview_surface);
