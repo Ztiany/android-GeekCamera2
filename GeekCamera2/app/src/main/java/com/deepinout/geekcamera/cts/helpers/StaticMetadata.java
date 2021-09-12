@@ -2331,30 +2331,28 @@ public class StaticMetadata {
      * @return true if high speed video is supported.
      */
     public boolean isHighSpeedVideoSupported() {
-        List<Integer> sceneModes =
-                Arrays.asList(CameraTestUtils.toObject(getAvailableSceneModesChecked()));
-        if (sceneModes.contains(CameraCharacteristics.CONTROL_SCENE_MODE_HIGH_SPEED_VIDEO)) {
-            StreamConfigurationMap config =
-                    getValueFromKeyNonNull(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-            if (config == null) {
-                return false;
-            }
-            Size[] availableSizes = config.getHighSpeedVideoSizes();
-            if (availableSizes.length == 0) {
-                return false;
-            }
-
-            for (Size size : availableSizes) {
-                Range<Integer>[] availableFpsRanges = config.getHighSpeedVideoFpsRangesFor(size);
-                if (availableFpsRanges.length == 0) {
-                    return false;
-                }
-            }
-
-            return true;
-        } else {
+        if (!isCapabilitySupported(
+                CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_CONSTRAINED_HIGH_SPEED_VIDEO)) {
             return false;
         }
+        StreamConfigurationMap config =
+                getValueFromKeyNonNull(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+        if (config == null) {
+            return false;
+        }
+        Size[] availableSizes = config.getHighSpeedVideoSizes();
+        if (availableSizes.length == 0) {
+            return false;
+        }
+
+        for (Size size : availableSizes) {
+            Range<Integer>[] availableFpsRanges = config.getHighSpeedVideoFpsRangesFor(size);
+            if (availableFpsRanges.length == 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

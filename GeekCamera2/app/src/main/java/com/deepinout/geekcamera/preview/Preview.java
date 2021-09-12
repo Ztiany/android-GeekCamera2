@@ -5469,7 +5469,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             if( MyDebug.LOG )
                 Log.d(TAG, "copy video profile to media recorder");
 
-            profile.copyToMediaRecorder(local_video_recorder);
+            profile.copyToMediaRecorder(local_video_recorder, false);
 
             boolean told_app_starting = false; // true if we called applicationInterface.startingVideo()
             try {
@@ -6762,6 +6762,10 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( MyDebug.LOG )
             Log.d(TAG, "isVideoHighSpeed");
         return is_video && video_high_speed;
+    }
+
+    public boolean isSlowMotion() {
+        return is_video && video_high_speed & true;
     }
 
     public boolean canDisableShutterSound() {

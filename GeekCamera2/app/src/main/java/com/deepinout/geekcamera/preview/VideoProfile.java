@@ -3,6 +3,7 @@ package com.deepinout.geekcamera.preview;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.util.Log;
+import android.util.Size;
 
 import androidx.annotation.NonNull;
 
@@ -33,9 +34,22 @@ public class VideoProfile {
     public int videoFrameHeight;
     public int videoFrameWidth;
 
+    private static final int BIT_RATE_720P = 8000000;
+    private static final int BIT_RATE_MIN = 64000;
+    private static final int BIT_RATE_MAX = BIT_RATE_720P;
+
     /** Returns a dummy video profile, used if video isn't supported.
      */
     VideoProfile() {
+    }
+
+    private int getVideoBitRate(Size sz) {
+        int rate = BIT_RATE_720P;
+        float scaleFactor = sz.getHeight() * sz.getWidth() / (float)(1280 * 720);
+        rate = (int)(rate * scaleFactor);
+
+        // Clamp to the MIN, MAX range.
+        return Math.max(BIT_RATE_MIN, Math.min(BIT_RATE_MAX, rate));
     }
 
     VideoProfile(CamcorderProfile camcorderProfile) {
@@ -75,13 +89,25 @@ public class VideoProfile {
         );
     }
 
+    public void copyToMediaRecorderSlowMotion(MediaRecorder mediaRecorder) {
+        mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+        mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
+        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+        mediaRecorder.setVideoEncodingBitRate(getVideoBitRate(new Size(this.videoFrameWidth, this.videoFrameHeight)));
+        mediaRecorder.setVideoFrameRate(30);
+        mediaRecorder.setCaptureRate(this.videoCaptureRate);
+        mediaRecorder.setVideoSize(this.videoFrameWidth, this.videoFrameHeight);
+        mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+        mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+    }
+
     /**
      * Copies the fields of this profile to a MediaRecorder instance.
      */
-    public void copyToMediaRecorder(MediaRecorder media_recorder) {
+    public void copyToMediaRecorder(MediaRecorder media_recorder, boolean slow_motion) {
         if( MyDebug.LOG )
             Log.d(TAG, "copyToMediaRecorder: " + media_recorder + toString());
-        if( record_audio ) {
+        if( record_audio && !slow_motion) {
             if( MyDebug.LOG )
                 Log.d(TAG, "record audio");
             media_recorder.setAudioSource(this.audioSource);
@@ -90,17 +116,16 @@ public class VideoProfile {
         // n.b., order may be important - output format should be first, at least
         // also match order of MediaRecorder.setProfile() just to be safe, see https://stackoverflow.com/questions/5524672/is-it-possible-to-use-camcorderprofile-without-audio-source
         media_recorder.setOutputFormat(this.fileFormat);
-        media_recorder.setVideoFrameRate(this.videoFrameRate);
-        // it's probably safe to always call setCaptureRate, but to be safe (and keep compatibility with old Open Camera versions), we only do so when needed
-        if( this.videoCaptureRate != (double)this.videoFrameRate ) {
-            if( MyDebug.LOG )
-                Log.d(TAG, "set capture rate");
-            media_recorder.setCaptureRate(this.videoCaptureRate);
+        if (slow_motion) {
+            media_recorder.setVideoFrameRate(30);
+        } else {
+            media_recorder.setVideoFrameRate(this.videoFrameRate);
         }
+        media_recorder.setCaptureRate(this.videoCaptureRate);
         media_recorder.setVideoSize(this.videoFrameWidth, this.videoFrameHeight);
         media_recorder.setVideoEncodingBitRate(this.videoBitRate);
         media_recorder.setVideoEncoder(this.videoCodec);
-        if( record_audio ) {
+        if( record_audio && !slow_motion) {
             media_recorder.setAudioEncodingBitRate(this.audioBitRate);
             media_recorder.setAudioChannels(this.audioChannels);
             media_recorder.setAudioSamplingRate(this.audioSampleRate);

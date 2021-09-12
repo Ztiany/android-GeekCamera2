@@ -2636,7 +2636,7 @@ public class CameraController2 extends CameraController {
         doInitSupportedPreviewSizes(camera_features, configs);// for preview size list
         doInitSupportedJpegSizes(camera_features, configs);   // for jpeg size list
         doInitSupportedVideoSizes(camera_features, configs); // for normal video size list
-        if( capabilities_high_speed_video ) {
+        if( capabilities_high_speed_video && mStaticMetadata.isHighSpeedVideoSupported()) {
             doInitSupportedHighSpeedVideoSizes(camera_features, configs); //high speed video list
         }
 
@@ -2989,7 +2989,7 @@ public class CameraController2 extends CameraController {
 
     private void doInitSupportedHighSpeedVideoSizes(CameraFeatures camera_features,
                                                     StreamConfigurationMap configs) {
-
+        Log.i(TAG, "[Slow_Motion] doInitSupportedHighSpeedVideoSizes");
         hs_fps_ranges = new ArrayList<>();
         camera_features.mSupportedVideoSizesHighSpeed = new ArrayList<>();
 
@@ -2998,25 +2998,33 @@ public class CameraController2 extends CameraController {
         }
         Collections.sort(hs_fps_ranges, new CameraController.RangeSorter());
         if( MyDebug.LOG ) {
-            Log.i(TAG, "[Slow_Motion] Supported high speed video fps ranges: ");
+            Log.i(TAG, "[Slow_Motion] Camera Supported high speed video fps ranges: ");
             for (int[] f : hs_fps_ranges) {
-                Log.i(TAG, "   hs range: [" + f[0] + "-" + f[1] + "]");
+                Log.i(TAG, "[Slow_Motion]   camera hs range: [" + f[0] + "-" + f[1] + "]");
+            }
+            Log.i(TAG, "[Slow_Motion] Video Supported high speed video camcorder profiles: ");
+            for (int quality = CamcorderProfile.QUALITY_HIGH_SPEED_LOW;
+                 quality <= CamcorderProfile.QUALITY_HIGH_SPEED_2160P; quality++) {
+                if (CamcorderProfile.hasProfile(quality)) {
+                    CamcorderProfile profile = CamcorderProfile.get(quality);
+                    Log.i(TAG, "[Slow_Motion]   video hs camcorder profile:" + profile.videoFrameWidth
+                                    + "x" + profile.videoFrameHeight + "@" + profile.videoFrameRate + " fps" +
+                                       ",quality:" + quality);
+                }
             }
         }
-
 
         android.util.Size[] camera_video_sizes_high_speed = configs.getHighSpeedVideoSizes();
         for(android.util.Size camera_size : camera_video_sizes_high_speed) {
             for (Range<Integer> r : configs.getHighSpeedVideoFpsRangesFor(camera_size)) {
                 int profile_fps = getFpsFromHighSpeedProfileForSize(camera_size);
                 if (r.getUpper() > r.getLower()) {
-                    Log.e(TAG, "doInitSupportedHighSpeedVideoSizes fps range:" + r.toString());
+                    Log.w(TAG, "[Slow_Motion] skip " + camera_size + "@fps range:" + r.toString());
                     continue;
                 }
-                if (!isSupportedByAVCEncoder(camera_size, r.getUpper())) {
-                    Log.e(TAG, "doInitSupportedHighSpeedVideoSizes high speed recording " +
-                            camera_size + "@" + r.getLower() + "fps"
-                            + " is not supported by CamcorderProfile, fps:" + profile_fps);
+                if (r.getUpper() != profile_fps) {
+                    Log.w(TAG, "[Slow_Motion] high speed recording " + camera_size + "@" + r.getUpper() + "fps"
+                            + " is not supported by CamcorderProfile");
                     continue;
                 }
                 ArrayList<int[]> fr = new ArrayList<>();
@@ -3028,7 +3036,7 @@ public class CameraController2 extends CameraController {
                         fr,
                         true);
                 if (MyDebug.LOG) {
-                    Log.i(TAG, "doInitSupportedHighSpeedVideoSizes high speed video size: " +
+                    Log.i(TAG, "[Slow_Motion] added high speed video size: " +
                             hs_video_size +
                             ", fps range:" + r.toString());
                 }
@@ -5320,6 +5328,7 @@ public class CameraController2 extends CameraController {
                 if( is_video_high_speed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
                     CameraConstrainedHighSpeedCaptureSession captureSessionHighSpeed = (CameraConstrainedHighSpeedCaptureSession) mCameraCaptureSession;
                     List<CaptureRequest> mPreviewBuilderBurst = captureSessionHighSpeed.createHighSpeedRequestList(request);
+                    Log.i(TAG, "[Slow_Motion] setRepeatingBurst createHighSpeedRequestList size:" + mPreviewBuilderBurst.size());
                     captureSessionHighSpeed.setRepeatingBurst(mPreviewBuilderBurst, previewCaptureCallback, mCameraBackgroundHandler);
                 }
                 else {
@@ -5893,7 +5902,7 @@ public class CameraController2 extends CameraController {
             if (recordOutputConfiguration != null) {
                 outputConfigurations.add(recordOutputConfiguration);
             }
-            if (captureOutputConfiguration != null) {
+            if (captureOutputConfiguration != null && !is_video_high_speed) {
                 outputConfigurations.add(captureOutputConfiguration);
             }
             if( video_recorder != null && want_video_high_speed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
@@ -5945,7 +5954,7 @@ public class CameraController2 extends CameraController {
                 }
                 mSessionConfiguration.setSessionParameters(mPreviewBuilder.build());
                 mCameraDevice.createCaptureSession(mSessionConfiguration);
-                Log.i(TAG, "createCaptureSession, size:" + outputConfigurations.size());
+                Log.i(TAG, "[Slow_Motion] createCaptureSession, size:" + outputConfigurations.size());
             } else {
                 if (is_video_high_speed) {
                     mCameraDevice.createConstrainedHighSpeedCaptureSession(surfaces,
@@ -8052,10 +8061,10 @@ public class CameraController2 extends CameraController {
             if( MyDebug.LOG ) {
                 if( getRequestTagType(request) == RequestTagType.CAPTURE ) {
                     Log.i(TAG, "onCaptureCompleted: capture");
-                    Log.i(TAG, "sequenceId: " + result.getSequenceId());
-                    Log.i(TAG, "frameNumber: " + result.getFrameNumber());
-                    Log.i(TAG, "exposure time: " + request.get(CaptureRequest.SENSOR_EXPOSURE_TIME));
-                    Log.i(TAG, "frame duration: " + request.get(CaptureRequest.SENSOR_FRAME_DURATION));
+                    Log.i(TAG, "[Capture_Result] sequenceId: " + result.getSequenceId());
+                    Log.i(TAG, "[Capture_Result] frameNumber: " + result.getFrameNumber());
+                    Log.i(TAG, "[Capture_Result] exposure time: " + result.get(CaptureResult.SENSOR_EXPOSURE_TIME));
+                    Log.i(TAG, "[Capture_Result] frame duration: " + result.get(CaptureResult.SENSOR_FRAME_DURATION));
                 }
             }
             if(getRequestTagType(request) == RequestTagType.CAPTURE ) {
