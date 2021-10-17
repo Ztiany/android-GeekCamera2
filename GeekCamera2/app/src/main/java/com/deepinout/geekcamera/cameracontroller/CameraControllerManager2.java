@@ -65,6 +65,8 @@ public class CameraControllerManager2 extends CameraControllerManager {
                     printAvailableRequestKeys(mContext, i);
                     printAvailableResultKeys(mContext, i);
                     printAvailableStaticKeys(mContext, i);
+                    printAvailableControlModes(mContext, i);
+                    printAvailableAEModes(mContext, i);
                 }
                 mPrintedInfo = true;
             }
@@ -310,6 +312,74 @@ public class CameraControllerManager2 extends CameraControllerManager {
             List <CaptureRequest.Key<?>> availabeSessionKeys = characteristics.getAvailableSessionKeys();
             for (CaptureRequest.Key sessionKey : availabeSessionKeys) {
                 Log.i(TAG, "cameraId;" + cameraIdS + ", sessionKey name:" + sessionKey.getName());
+            }
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void printAvailableControlModes(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            int[] availableControlMOdes = characteristics.get(CameraCharacteristics.CONTROL_AVAILABLE_MODES);
+
+            for (int controlMode : availableControlMOdes) {
+                String controlModeStr = "";
+                switch (controlMode) {
+                    case CaptureRequest.CONTROL_MODE_OFF:
+                        controlModeStr = "OFF";
+                        break;
+                    case CaptureRequest.CONTROL_MODE_AUTO:
+                        controlModeStr = "AUTO";
+                        break;
+                    case CaptureRequest.CONTROL_MODE_USE_SCENE_MODE:
+                        controlModeStr = "USE_SCENE_MODE";
+                        break;
+                    case CaptureRequest.CONTROL_MODE_OFF_KEEP_STATE:
+                        controlModeStr = "OFF_KEEP_STATE";
+                        break;
+                    default:
+                        break;
+                }
+                Log.i(TAG, "cameraId;" + cameraIdS + ", support control mode:" + controlModeStr);
+            }
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void printAvailableAEModes(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            int[] availableAeMOdes = characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES);
+
+            for (int aeMode : availableAeMOdes) {
+                String controlModeStr = "";
+                switch (aeMode) {
+                    case CaptureRequest.CONTROL_AE_MODE_OFF:
+                        controlModeStr = "OFF";
+                        break;
+                    case CaptureRequest.CONTROL_AE_MODE_ON:
+                        controlModeStr = "ON";
+                        break;
+                    case CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH:
+                        controlModeStr = "ON_AUTO_FLASH";
+                        break;
+                    case CaptureRequest.CONTROL_AE_MODE_ON_ALWAYS_FLASH:
+                        controlModeStr = "ON_ALWAYS_FLASH";
+                        break;
+                    case CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH_REDEYE:
+                        controlModeStr = "ON_AUTO_FLASH_REDEYE";
+                        break;
+                    case CaptureRequest.CONTROL_AE_MODE_ON_EXTERNAL_FLASH:
+                        controlModeStr = "ON_EXTERNAL_FLASH";
+                        break;
+                    default:
+                        break;
+                }
+                Log.i(TAG, "cameraId;" + cameraIdS + ", support ae modes:" + controlModeStr);
             }
         } catch (Exception e) {
 

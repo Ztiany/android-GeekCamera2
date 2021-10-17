@@ -63,7 +63,6 @@ import androidx.annotation.RequiresApi;
 import android.util.Log;
 import android.util.Pair;
 import android.util.Range;
-import android.util.Size;
 import android.util.SizeF;
 import android.view.Display;
 import android.view.Surface;
@@ -268,8 +267,8 @@ public class CameraController2 extends CameraController {
 
     private boolean has_received_frame;
     private boolean capture_result_is_ae_scanning;
-    private Integer capture_result_ae; // latest ae_state, null if not available
-    private boolean is_flash_required; // whether capture_result_ae suggests FLASH_REQUIRED? Or in neither FLASH_REQUIRED nor CONVERGED, this stores the last known result
+    private Integer m_capture_result_ae; // latest ae_state, null if not available
+    private boolean m_is_flash_required; // whether capture_result_ae suggests FLASH_REQUIRED? Or in neither FLASH_REQUIRED nor CONVERGED, this stores the last known result
     private boolean modified_from_camera_settings;
         // if modified_from_camera_settings set to true, then we've temporarily requested captures with settings such as
         // exposure modified from the normal ones in camera_settings
@@ -7626,7 +7625,7 @@ public class CameraController2 extends CameraController {
         }
         switch(camera_settings.flash_value) {
             case "flash_auto":
-                fake_precapture_use_flash = is_flash_required;
+                fake_precapture_use_flash = m_is_flash_required;
                 break;
             case "flash_frontscreen_auto":
                 fake_precapture_use_flash = fireAutoFlashFrontScreen();
@@ -7733,8 +7732,7 @@ public class CameraController2 extends CameraController {
                     // standard flash, flash auto or on
                     // note that we don't call needsFlash() (or use is_flash_required) - as if ae state is neither CONVERGED nor FLASH_REQUIRED, we err on the side
                     // of caution and don't skip the precapture
-                    //boolean needs_flash = capture_result_ae != null && capture_result_ae == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED;
-                    boolean needs_flash = capture_result_ae != null && capture_result_ae != CaptureResult.CONTROL_AE_STATE_CONVERGED;
+                    boolean needs_flash = m_capture_result_ae != null && m_capture_result_ae != CaptureResult.CONTROL_AE_STATE_CONVERGED;
                     if( camera_settings.flash_value.equals("flash_auto") && !needs_flash ) {
                         // if we call precapture anyway, flash wouldn't fire - but we tend to have a pause
                         // so skipping the precapture if flash isn't going to fire makes this faster
@@ -7868,7 +7866,7 @@ public class CameraController2 extends CameraController {
     public boolean needsFlash() {
         //boolean needs_flash = capture_result_ae != null && capture_result_ae == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED;
         //return needs_flash;
-        return is_flash_required;
+        return m_is_flash_required;
     }
 
     @Override
@@ -8067,6 +8065,35 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "[Capture_Result] frame duration: " + result.get(CaptureResult.SENSOR_FRAME_DURATION));
                 }
             }
+            if (MyDebug.LOG) {
+                if (result.get(CaptureResult.CONTROL_AE_STATE) != null) {
+                    int aeState = result.get(CaptureResult.CONTROL_AE_STATE);
+                    String aeStateStr = "";
+                    switch (aeState) {
+                        case CaptureResult.CONTROL_AE_STATE_INACTIVE:
+                            aeStateStr = "INACTIVE";
+                            break;
+                        case CaptureResult.CONTROL_AE_STATE_SEARCHING:
+                            aeStateStr = "SEARCHING";
+                            break;
+                        case CaptureResult.CONTROL_AE_STATE_CONVERGED:
+                            aeStateStr = "CONVERGED";
+                            break;
+                        case CaptureResult.CONTROL_AE_STATE_LOCKED:
+                            aeStateStr = "LOCKED";
+                            break;
+                        case CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED:
+                            aeStateStr = "FLASH_REQUIRED";
+                            break;
+                        case CaptureResult.CONTROL_AE_STATE_PRECAPTURE:
+                            aeStateStr = "PRECAPTURE";
+                            break;
+                        default:
+                            break;
+                    }
+                    Log.i(TAG, "AE_STATE:" + aeStateStr);
+                }
+            }
             if(getRequestTagType(request) == RequestTagType.CAPTURE ) {
                 Log.i(TAG, "[Capture_Callback] onCaptureCompleted timestamp:" + result.get(CaptureResult.SENSOR_TIMESTAMP));
             }
@@ -8113,24 +8140,6 @@ public class CameraController2 extends CameraController {
          */
         private void updateCachedAECaptureStatus(CaptureResult result) {
             Integer ae_state = result.get(CaptureResult.CONTROL_AE_STATE);
-            /*if( MyDebug.LOG ) {
-                if( ae_state == null )
-                    Log.i(TAG, "CONTROL_AE_STATE is null");
-                else if( ae_state == CaptureResult.CONTROL_AE_STATE_INACTIVE )
-                    Log.i(TAG, "CONTROL_AE_STATE = CONTROL_AE_STATE_INACTIVE");
-                else if( ae_state == CaptureResult.CONTROL_AE_STATE_SEARCHING )
-                    Log.i(TAG, "CONTROL_AE_STATE = CONTROL_AE_STATE_SEARCHING");
-                else if( ae_state == CaptureResult.CONTROL_AE_STATE_CONVERGED )
-                    Log.i(TAG, "CONTROL_AE_STATE = CONTROL_AE_STATE_CONVERGED");
-                else if( ae_state == CaptureResult.CONTROL_AE_STATE_LOCKED )
-                    Log.i(TAG, "CONTROL_AE_STATE = CONTROL_AE_STATE_LOCKED");
-                else if( ae_state == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED )
-                    Log.i(TAG, "CONTROL_AE_STATE = CONTROL_AE_STATE_FLASH_REQUIRED");
-                else if( ae_state == CaptureResult.CONTROL_AE_STATE_PRECAPTURE )
-                    Log.i(TAG, "CONTROL_AE_STATE = CONTROL_AE_STATE_PRECAPTURE");
-                else
-                    Log.i(TAG, "CONTROL_AE_STATE = " + ae_state);
-            }*/
             Integer flash_mode = result.get(CaptureResult.FLASH_MODE);
             /*if( MyDebug.LOG ) {
                 if( flash_mode == null )
@@ -8149,22 +8158,22 @@ public class CameraController2 extends CameraController {
                 // don't change ae state while torch is on for fake flash
             }
             else if( ae_state == null ) {
-                capture_result_ae = null;
-                is_flash_required = false;
+                m_capture_result_ae = null;
+                m_is_flash_required = false;
             }
-            else if( !ae_state.equals(capture_result_ae) ) {
+            else if( !ae_state.equals(m_capture_result_ae) ) {
                 // need to store this before calling the autofocus callbacks below
                 if( MyDebug.LOG )
-                    Log.i(TAG, "CONTROL_AE_STATE changed from " + capture_result_ae + " to " + ae_state);
-                capture_result_ae = ae_state;
+                    Log.i(TAG, "CONTROL_AE_STATE changed from " + m_capture_result_ae + " to " + ae_state);
+                m_capture_result_ae = ae_state;
                 // capture_result_ae should always be non-null here, as we've already handled ae_state separately
-                if( capture_result_ae == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED && !is_flash_required ) {
-                    is_flash_required = true;
+                if( m_capture_result_ae == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED && !m_is_flash_required) {
+                    m_is_flash_required = true;
                     if( MyDebug.LOG )
                         Log.i(TAG, "flash now required");
                 }
-                else if( capture_result_ae == CaptureResult.CONTROL_AE_STATE_CONVERGED && is_flash_required ) {
-                    is_flash_required = false;
+                else if( m_capture_result_ae == CaptureResult.CONTROL_AE_STATE_CONVERGED && m_is_flash_required) {
+                    m_is_flash_required = false;
                     if( MyDebug.LOG )
                         Log.i(TAG, "flash no longer required");
                 }
@@ -8370,7 +8379,7 @@ public class CameraController2 extends CameraController {
                     else
                         Log.i(TAG, "CONTROL_AE_STATE is null");
                 }
-                if( ae_state == null || ae_state == CaptureResult.CONTROL_AE_STATE_PRECAPTURE /*|| ae_state == CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED*/ ) {
+                if( ae_state == null || ae_state == CaptureResult.CONTROL_AE_STATE_PRECAPTURE) {
                     // we have to wait for CONTROL_AE_STATE_PRECAPTURE; if we allow CONTROL_AE_STATE_FLASH_REQUIRED, then on Nexus 6 at least we get poor quality results with flash:
                     // varying levels of brightness, sometimes too bright or too dark, sometimes with blue tinge, sometimes even with green corruption
                     // similarly photos with flash come out too dark on OnePlus 3T
@@ -8490,24 +8499,6 @@ public class CameraController2 extends CameraController {
             }
         }
 
-        private void handleContinuousFocusMove(CaptureResult result) {
-            Integer af_state = result.get(CaptureResult.CONTROL_AF_STATE);
-            if( af_state != null && af_state == CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN && af_state != last_af_state ) {
-                /*if( MyDebug.LOG )
-                    Log.i(TAG, "continuous focusing started");*/
-                if( continuous_focus_move_callback != null ) {
-                    continuous_focus_move_callback.onContinuousFocusMove(true);
-                }
-            }
-            else if( af_state != null && last_af_state == CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN && af_state != last_af_state ) {
-                /*if( MyDebug.LOG )
-                    Log.i(TAG, "continuous focusing stopped");*/
-                if( continuous_focus_move_callback != null ) {
-                    continuous_focus_move_callback.onContinuousFocusMove(false);
-                }
-            }
-        }
-
         /** Processes either a partial or total result.
          */
         private void process(CaptureRequest request, CaptureResult result) {
@@ -8540,6 +8531,24 @@ public class CameraController2 extends CameraController {
             /*if( MyDebug.LOG ) {
                 Log.i(TAG, "process() took: " + (System.currentTimeMillis() - debug_time));
             }*/
+        }
+
+        private void handleContinuousFocusMove(CaptureResult result) {
+            Integer af_state = result.get(CaptureResult.CONTROL_AF_STATE);
+            if( af_state != null && af_state == CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN && af_state != last_af_state ) {
+                /*if( MyDebug.LOG )
+                    Log.i(TAG, "continuous focusing started");*/
+                if( continuous_focus_move_callback != null ) {
+                    continuous_focus_move_callback.onContinuousFocusMove(true);
+                }
+            }
+            else if( af_state != null && last_af_state == CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN && af_state != last_af_state ) {
+                /*if( MyDebug.LOG )
+                    Log.i(TAG, "continuous focusing stopped");*/
+                if( continuous_focus_move_callback != null ) {
+                    continuous_focus_move_callback.onContinuousFocusMove(false);
+                }
+            }
         }
 
         /** Updates cached information regarding the capture result.
