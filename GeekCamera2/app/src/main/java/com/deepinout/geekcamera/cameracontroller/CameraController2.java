@@ -2765,6 +2765,9 @@ public class CameraController2 extends CameraController {
         camera_features.min_exposure = exposure_range.getLower();
         camera_features.max_exposure = exposure_range.getUpper();
         camera_features.exposure_step = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP).floatValue();
+        Log.i(TAG, "[EV] compensation range:" + exposure_range + ", compensation step:" + camera_features.exposure_step +
+                        ", is AE lock supported:" + mStaticMetadata.isAeLockSupported() +
+                        ", max ae regions:" + mStaticMetadata.getAeMaxRegionsChecked());
 
         camera_features.can_disable_shutter_sound = true;
 
