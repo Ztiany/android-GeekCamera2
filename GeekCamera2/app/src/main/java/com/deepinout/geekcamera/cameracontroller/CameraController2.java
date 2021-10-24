@@ -402,7 +402,7 @@ public class CameraController2 extends CameraController {
         private float aperture;
         private Rect scalar_crop_region; // no need for has_scalar_crop_region, as we can set to null instead
         private boolean has_ae_exposure_compensation;
-        private int ae_exposure_compensation;
+        private int m_ae_exposure_compensation;
         private boolean has_af_mode;
         private int af_mode = CaptureRequest.CONTROL_AF_MODE_AUTO;
         private float focus_distance; // actual value passed to camera device (set to 0.0 if in infinity mode)
@@ -836,10 +836,10 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "don't set exposure compensation in manual iso mode");
                 return false;
             }
-            if( builder.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION) == null || ae_exposure_compensation != builder.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION) ) {
+            if( builder.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION) == null || m_ae_exposure_compensation != builder.get(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION) ) {
                 if( MyDebug.LOG )
-                    Log.i(TAG, "change exposure to " + ae_exposure_compensation);
-                builder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, ae_exposure_compensation);
+                    Log.i(TAG, "change exposure to " + m_ae_exposure_compensation);
+                builder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, m_ae_exposure_compensation);
                 return true;
             }
             return false;
@@ -4622,7 +4622,7 @@ public class CameraController2 extends CameraController {
     // Returns whether exposure was modified
     public boolean setExposureCompensation(int new_exposure) {
         camera_settings.has_ae_exposure_compensation = true;
-        camera_settings.ae_exposure_compensation = new_exposure;
+        camera_settings.m_ae_exposure_compensation = new_exposure;
         if( camera_settings.setExposureCompensation(mPreviewBuilder) ) {
             try {
                 setRepeatingRequest();
@@ -8565,6 +8565,7 @@ public class CameraController2 extends CameraController {
             else if( result.get(CaptureResult.SENSOR_SENSITIVITY) != null ) {
                 capture_result_has_iso = true;
                 capture_result_iso = result.get(CaptureResult.SENSOR_SENSITIVITY);
+                Log.i(TAG, "AE_Practice SENSOR_SENSITIVITY:" + capture_result_iso);
                 /*if( MyDebug.LOG )
                     Log.i(TAG, "capture_result_iso: " + capture_result_iso);*/
                 /*if( camera_settings.has_iso && Math.abs(camera_settings.iso - capture_result_iso) > 10 && previewBuilder != null ) {
@@ -8607,7 +8608,7 @@ public class CameraController2 extends CameraController {
             else if( result.get(CaptureResult.SENSOR_EXPOSURE_TIME) != null ) {
                 capture_result_has_exposure_time = true;
                 capture_result_exposure_time = result.get(CaptureResult.SENSOR_EXPOSURE_TIME);
-
+                Log.i(TAG, "AE_Practice SENSOR_EXPOSURE_TIME:" + capture_result_exposure_time);
                 // If using manual exposure time longer than max_preview_exposure_time_c, the preview will be fixed to
                 // max_preview_exposure_time_c, so we should just use the requested manual exposure time.
                 // (This affects the exposure time shown on on-screen preview - whilst showing the preview exposure time
