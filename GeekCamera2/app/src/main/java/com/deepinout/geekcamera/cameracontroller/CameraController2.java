@@ -735,6 +735,7 @@ public class CameraController2 extends CameraController {
         private boolean setAEMode(CaptureRequest.Builder builder, boolean is_still) {
             if( MyDebug.LOG )
                 Log.i(TAG, "setAEMode");
+            builder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
             if( has_iso ) {
                 if( MyDebug.LOG ) {
                     Log.i(TAG, "manual mode");
@@ -798,6 +799,8 @@ public class CameraController2 extends CameraController {
                     else*/
                         builder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON_ALWAYS_FLASH);
                         builder.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_OFF);
+//                        builder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON);
+//                        builder.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_SINGLE);
                         break;
                     case "flash_torch":
                         builder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON);
@@ -8069,6 +8072,15 @@ public class CameraController2 extends CameraController {
                 }
             }
             if (MyDebug.LOG) {
+                if (result.get(CaptureResult.FLASH_MODE) != null &&
+                    result.get(CaptureResult.FLASH_STATE) != null &&
+                    result.get(CaptureResult.CONTROL_AE_MODE) != null) {
+                    Log.i(TAG, "[Flash] flash mode:" + result.get(CaptureResult.FLASH_MODE) +
+                                    ", ae mode:" + result.get(CaptureResult.CONTROL_AE_MODE) +
+                                    ", flash state:" + result.get(CaptureResult.FLASH_STATE));
+                }
+            }
+            if (MyDebug.LOG) {
                 if (result.get(CaptureResult.CONTROL_AE_STATE) != null) {
                     int aeState = result.get(CaptureResult.CONTROL_AE_STATE);
                     String aeStateStr = "";
@@ -8632,6 +8644,7 @@ public class CameraController2 extends CameraController {
             else if( result.get(CaptureResult.SENSOR_FRAME_DURATION) != null ) {
                 capture_result_has_frame_duration = true;
                 capture_result_frame_duration = result.get(CaptureResult.SENSOR_FRAME_DURATION);
+                Log.i(TAG, "AE_Practice SENSOR_FRAME_DURATION:" + capture_result_frame_duration);
             }
             else {
                 capture_result_has_frame_duration = false;

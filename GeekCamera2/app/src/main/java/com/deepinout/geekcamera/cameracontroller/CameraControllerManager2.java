@@ -67,6 +67,7 @@ public class CameraControllerManager2 extends CameraControllerManager {
                     printAvailableStaticKeys(mContext, i);
                     printAvailableControlModes(mContext, i);
                     printAvailableAEModes(mContext, i);
+                    printFlashAvailable(mContext, i);
                 }
                 mPrintedInfo = true;
             }
@@ -381,6 +382,17 @@ public class CameraControllerManager2 extends CameraControllerManager {
                 }
                 Log.i(TAG, "cameraId;" + cameraIdS + ", support ae modes:" + controlModeStr);
             }
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void printFlashAvailable(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            Boolean flashAvailable = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+            Log.i(TAG, "[Flash]cameraId:" + cameraIdS + ", printFlashAvailable:" + flashAvailable);
         } catch (Exception e) {
 
         }
