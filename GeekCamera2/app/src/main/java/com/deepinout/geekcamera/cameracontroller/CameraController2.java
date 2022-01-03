@@ -2444,7 +2444,7 @@ public class CameraController2 extends CameraController {
         float max_zoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
         camera_features.is_zoom_supported = max_zoom > 0.0f;
         if( MyDebug.LOG )
-            Log.i(TAG, "max_zoom: " + max_zoom);
+            Log.i(TAG, "[Zoom] max_zoom: " + max_zoom);
         if( camera_features.is_zoom_supported ) {
             // set 20 steps per 2x factor
             final int steps_per_2x_factor = 20;
@@ -2452,8 +2452,8 @@ public class CameraController2 extends CameraController {
             int n_steps =(int)( (steps_per_2x_factor * Math.log(max_zoom + 1.0e-11)) / Math.log(2.0));
             final double scale_factor = Math.pow(max_zoom, 1.0/(double)n_steps);
             if( MyDebug.LOG ) {
-                Log.i(TAG, "n_steps: " + n_steps);
-                Log.i(TAG, "scale_factor: " + scale_factor);
+                Log.i(TAG, "[Zoom] n_steps: " + n_steps);
+                Log.i(TAG, "[Zoom] scale_factor: " + scale_factor);
             }
             camera_features.zoom_ratios = new ArrayList<>();
             camera_features.zoom_ratios.add(100);
@@ -2461,6 +2461,7 @@ public class CameraController2 extends CameraController {
             for(int i=0;i<n_steps-1;i++) {
                 zoom *= scale_factor;
                 camera_features.zoom_ratios.add((int)(zoom*100));
+                Log.i(TAG, "[Zoom] zoom:" + zoom*100);
             }
             camera_features.zoom_ratios.add((int)(max_zoom*100));
             camera_features.max_zoom = camera_features.zoom_ratios.size()-1;
@@ -4568,8 +4569,17 @@ public class CameraController2 extends CameraController {
                 Log.e(TAG, "invalid zoom value" + value);
             throw new RuntimeException(); // throw as RuntimeException, as this is a programming error
         }
+        Log.i(TAG, "[Zoom] setZoom value:" + value);
         float zoom = zoom_ratios.get(value)/100.0f;
         Rect sensor_rect = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+        if (mPreviewBuilder.get(CaptureRequest.DISTORTION_CORRECTION_MODE) != null) {
+            int distortionMode = mPreviewBuilder.get(CaptureRequest.DISTORTION_CORRECTION_MODE);
+            if (mStaticMetadata.isDistortionCorrectionSupported() &&
+                    distortionMode == CaptureRequest.DISTORTION_CORRECTION_MODE_OFF) {
+                sensor_rect = characteristics.get(CameraCharacteristics.SENSOR_INFO_PRE_CORRECTION_ACTIVE_ARRAY_SIZE);
+                Log.i(TAG, "[Zoom] distortionMode:" + distortionMode);
+            }
+        }
         int left = sensor_rect.width()/2;
         int right = left;
         int top = sensor_rect.height()/2;
@@ -4588,10 +4598,10 @@ public class CameraController2 extends CameraController {
             Log.i(TAG, "sensor_rect top: " + sensor_rect.top);
             Log.i(TAG, "sensor_rect right: " + sensor_rect.right);
             Log.i(TAG, "sensor_rect bottom: " + sensor_rect.bottom);
-            Log.i(TAG, "left: " + left);
-            Log.i(TAG, "top: " + top);
-            Log.i(TAG, "right: " + right);
-            Log.i(TAG, "bottom: " + bottom);
+            Log.i(TAG, "[Zoom] left: " + left);
+            Log.i(TAG, "[Zoom] top: " + top);
+            Log.i(TAG, "[Zoom] right: " + right);
+            Log.i(TAG, "[Zoom] bottom: " + bottom);
             /*Rect current_rect = previewBuilder.get(CaptureRequest.SCALER_CROP_REGION);
             Log.i(TAG, "current_rect left: " + current_rect.left);
             Log.i(TAG, "current_rect top: " + current_rect.top);
