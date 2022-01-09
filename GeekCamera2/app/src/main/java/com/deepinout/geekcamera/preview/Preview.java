@@ -520,6 +520,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             boolean mirror = (mCameraController.getFacing() == CameraController.Facing.FACING_FRONT);
             camera_to_preview_matrix.setScale(1, mirror ? -1 : 1);
             int degrees = getDisplayRotationDegrees();
+            Log.d(TAG, "[Touch AEAF] view degrees:" + degrees);
             int result = (mCameraController.getCameraOrientation() - degrees + 360) % 360;
             if( MyDebug.LOG ) {
                 Log.d(TAG, "orientation of display relative to natural orientaton: " + degrees);
@@ -589,6 +590,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 
         ArrayList<CameraController.Area> areas = new ArrayList<>();
         areas.add(new CameraController.Area(rect, 1000));
+        Log.d(TAG, "[Touch AEAF] area in API1 Coordinate:" + rect);
         return areas;
     }
 

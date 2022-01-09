@@ -68,6 +68,7 @@ public class CameraControllerManager2 extends CameraControllerManager {
                     printAvailableControlModes(mContext, i);
                     printAvailableAEModes(mContext, i);
                     printFlashAvailable(mContext, i);
+                    printMaxAERegions(mContext, i);
                 }
                 mPrintedInfo = true;
             }
@@ -393,6 +394,17 @@ public class CameraControllerManager2 extends CameraControllerManager {
             CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
             Boolean flashAvailable = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
             Log.i(TAG, "[Flash]cameraId:" + cameraIdS + ", printFlashAvailable:" + flashAvailable);
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void printMaxAERegions(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            Integer regionCount = characteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
+            Log.i(TAG, "[Touch AEAF]cameraId:" + cameraIdS + ", printMaxAERegions:" + regionCount);
         } catch (Exception e) {
 
         }

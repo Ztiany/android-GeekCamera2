@@ -877,12 +877,14 @@ public class CameraController2 extends CameraController {
 
         private void setAFRegions(CaptureRequest.Builder builder) {
             if( af_regions != null && characteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF) > 0 ) {
+                Log.i(TAG, "[Touch AEAF]setAFRegions region[0]:" + af_regions[0]);
                 builder.set(CaptureRequest.CONTROL_AF_REGIONS, af_regions);
             }
         }
 
         private void setAERegions(CaptureRequest.Builder builder) {
             if( ae_regions != null && characteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE) > 0 ) {
+                Log.i(TAG, "[Touch AEAF]setAERegions region[0]:" + ae_regions[0]);
                 builder.set(CaptureRequest.CONTROL_AE_REGIONS, ae_regions);
             }
         }
@@ -5078,6 +5080,9 @@ public class CameraController2 extends CameraController {
         right = Math.min(right, crop_rect.right);
         top = Math.min(top, crop_rect.bottom);
         bottom = Math.min(bottom, crop_rect.bottom);
+        Log.i(TAG, "[Touch AEAF] convertRectToCamera2 crop_rect:" + crop_rect +
+                ", rect:" + rect +
+                ", result:" + new Rect(left, top, right, bottom));
 
         return new Rect(left, top, right, bottom);
     }
