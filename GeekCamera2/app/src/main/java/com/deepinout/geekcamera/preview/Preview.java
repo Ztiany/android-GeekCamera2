@@ -2199,7 +2199,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                     @Override
                     public void onFaceDetection(final CameraController.Face[] faces) {
                         if( MyDebug.LOG )
-                            Log.d(TAG, "onFaceDetection: " + faces.length + " : " + Arrays.toString(faces));
+                            Log.d(TAG, "[FD]onFaceDetection: " + faces.length);
                         if( mCameraController == null ) {
                             // can get a crash in some cases when switching camera when face detection is on (at least for Camera2)
                             Activity activity = (Activity)Preview.this.getContext();

@@ -69,6 +69,7 @@ public class CameraControllerManager2 extends CameraControllerManager {
                     printAvailableAEModes(mContext, i);
                     printFlashAvailable(mContext, i);
                     printMaxAERegions(mContext, i);
+                    printFocusCapability(mContext, i);
                 }
                 mPrintedInfo = true;
             }
@@ -405,6 +406,21 @@ public class CameraControllerManager2 extends CameraControllerManager {
             CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
             Integer regionCount = characteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
             Log.i(TAG, "[Touch AEAF]cameraId:" + cameraIdS + ", printMaxAERegions:" + regionCount);
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void printFocusCapability(Context context, int cameraId) {
+        try {
+            String cameraIdS = mCameraManager.getCameraIdList()[cameraId];
+            CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(cameraIdS);
+            Float minFocusDistance = characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE);
+            Float hyperFocalDistance = characteristics.get(CameraCharacteristics.LENS_INFO_HYPERFOCAL_DISTANCE);
+            Integer focusDistanceCalib = characteristics.get(CameraCharacteristics.LENS_INFO_FOCUS_DISTANCE_CALIBRATION);
+            Log.i(TAG, "printFocusCapability cameraId:" + cameraIdS + ", minFocusDistance:" + minFocusDistance
+                            + ",hyperFocalDistance:" + hyperFocalDistance
+                            + ",focusDistanceCalib:" + focusDistanceCalib);
         } catch (Exception e) {
 
         }

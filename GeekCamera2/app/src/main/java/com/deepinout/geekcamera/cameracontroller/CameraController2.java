@@ -303,6 +303,8 @@ public class CameraController2 extends CameraController {
     CameraTestUtils.SimpleCaptureCallback mZslResultListener;
     //#### Added For App ZSL(Reprocessable) End
 
+    private long mPrintResultCounter = 0;
+
     //Vendor Tag Ops
     @SuppressLint("NewApi")
     public static final CameraCharacteristics.Key<Byte[]> mVendorTag_faceLandmark_availableIds =
@@ -603,7 +605,7 @@ public class CameraController2 extends CameraController {
             }
             else*/ if( builder.get(CaptureRequest.CONTROL_AWB_MODE) == null || builder.get(CaptureRequest.CONTROL_AWB_MODE) != white_balance ) {
                 if( MyDebug.LOG )
-                    Log.i(TAG, "setting white balance: " + white_balance);
+                    Log.i(TAG, "[AWB] setWhiteBalance white balance: " + white_balance);
                 builder.set(CaptureRequest.CONTROL_AWB_MODE, white_balance);
                 changed = true;
             }
@@ -851,7 +853,7 @@ public class CameraController2 extends CameraController {
         private void setFocusMode(CaptureRequest.Builder builder) {
             if( has_af_mode ) {
                 if( MyDebug.LOG )
-                    Log.i(TAG, "change af mode to " + af_mode);
+                    Log.i(TAG, "[AF_Practise] setFocusMode change af mode to " + af_mode);
                 builder.set(CaptureRequest.CONTROL_AF_MODE, af_mode);
             }
             else {
@@ -863,7 +865,7 @@ public class CameraController2 extends CameraController {
         
         private void setFocusDistance(CaptureRequest.Builder builder) {
             if( MyDebug.LOG )
-                Log.i(TAG, "change focus distance to " + focus_distance);
+                Log.i(TAG, "[AF_Practise] setFocusDistance change focus distance to " + focus_distance);
             builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focus_distance);
         }
 
@@ -1267,9 +1269,8 @@ public class CameraController2 extends CameraController {
         }
 
         if( MyDebug.LOG ) {
-            Log.i(TAG, "red: " + red);
-            Log.i(TAG, "green: " + green);
-            Log.i(TAG, "blue: " + blue);
+            Log.i(TAG, "[AWB] temperature_kelvin:" + temperature_kelvin + "===> red: " + red +
+                    ",green: " + green + ", blue: " + blue);
         }
         return new RggbChannelVector((red/255)*2,(green/255),(green/255),(blue/255)*2);
     }
@@ -2356,24 +2357,24 @@ public class CameraController2 extends CameraController {
         if( supported_focus_modes.contains(CaptureRequest.CONTROL_AF_MODE_AUTO) ) {
             output_modes.add("focus_mode_auto");
             if( MyDebug.LOG ) {
-                Log.i(TAG, " supports focus_mode_auto");
+                Log.i(TAG, "[AF_Practise] supports focus_mode_auto");
             }
         }
         if( supported_focus_modes.contains(CaptureRequest.CONTROL_AF_MODE_MACRO) ) {
             output_modes.add("focus_mode_macro");
             if( MyDebug.LOG )
-                Log.i(TAG, " supports focus_mode_macro");
+                Log.i(TAG, "[AF_Practise] supports focus_mode_macro");
         }
         if( supported_focus_modes.contains(CaptureRequest.CONTROL_AF_MODE_AUTO) ) {
             output_modes.add("focus_mode_locked");
             if( MyDebug.LOG ) {
-                Log.i(TAG, " supports focus_mode_locked");
+                Log.i(TAG, "[AF_Practise] supports focus_mode_locked");
             }
         }
         if( supported_focus_modes.contains(CaptureRequest.CONTROL_AF_MODE_OFF) ) {
             output_modes.add("focus_mode_infinity");
             if( MyDebug.LOG ) {
-                Log.i(TAG, " supports focus_mode_infinity");
+                Log.i(TAG, "[AF_Practise] supports focus_mode_infinity");
             }
             if( minimum_focus_distance > 0.0f ) {
                 output_modes.add("focus_mode_manual2");
@@ -2385,17 +2386,17 @@ public class CameraController2 extends CameraController {
         if( supported_focus_modes.contains(CaptureRequest.CONTROL_AF_MODE_EDOF) ) {
             output_modes.add("focus_mode_edof");
             if( MyDebug.LOG )
-                Log.i(TAG, " supports focus_mode_edof");
+                Log.i(TAG, "[AF_Practise] supports focus_mode_edof");
         }
         if( supported_focus_modes.contains(CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE) ) {
             output_modes.add("focus_mode_continuous_picture");
             if( MyDebug.LOG )
-                Log.i(TAG, " supports focus_mode_continuous_picture");
+                Log.i(TAG, "[AF_Practise] supports focus_mode_continuous_picture");
         }
         if( supported_focus_modes.contains(CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO) ) {
             output_modes.add("focus_mode_continuous_video");
             if( MyDebug.LOG )
-                Log.i(TAG, " supports focus_mode_continuous_video");
+                Log.i(TAG, "[AF_Practise] supports focus_mode_continuous_video");
         }
         return output_modes;
     }
@@ -2479,7 +2480,7 @@ public class CameraController2 extends CameraController {
         supports_face_detect_mode_full = false;
         for(int face_mode : face_modes) {
             if( MyDebug.LOG )
-                Log.i(TAG, "face detection mode: " + face_mode);
+                Log.i(TAG, "[FD] supported face detection mode: " + face_mode);
             // we currently only make use of the "SIMPLE" features, documented as:
             // "Return face rectangle and confidence values only."
             // note that devices that support STATISTICS_FACE_DETECT_MODE_FULL (e.g., Nexus 6) don't return
@@ -2506,6 +2507,7 @@ public class CameraController2 extends CameraController {
                 supports_face_detect_mode_simple = false;
                 supports_face_detect_mode_full = false;
             }
+            Log.i(TAG, "[FD] supported max face count:" + face_count);
         }
         if( camera_features.supports_face_detection ) {
             // check we have scene mode CONTROL_SCENE_MODE_FACE_PRIORITY
@@ -2698,7 +2700,12 @@ public class CameraController2 extends CameraController {
 
         camera_features.is_exposure_lock_supported = true;
 
-        camera_features.is_white_balance_lock_supported = true;
+        boolean awbLockAvailable = characteristics.get(CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE);
+        Log.i(TAG, "[AWB] lock available:" + awbLockAvailable);
+        camera_features.is_white_balance_lock_supported = false;
+        if (awbLockAvailable) {
+            camera_features.is_white_balance_lock_supported = true;
+        }
 
         camera_features.is_optical_stabilization_supported = false;
         int [] supported_optical_stabilization_modes = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION);
@@ -2733,6 +2740,7 @@ public class CameraController2 extends CameraController {
         int [] white_balance_modes = characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES);
         if( white_balance_modes != null ) {
             for(int value : white_balance_modes) {
+                Log.i(TAG, "[AWB] supported wb mode:" + convertWhiteBalance(value));
                 // n.b., Galaxy S10e for front and ultra-wide cameras offers CONTROL_AWB_MODE_OFF despite
                 // capabilities_manual_post_processing==false; if we don't check for capabilities_manual_post_processing,
                 // adjusting white balance temperature seems to work, but seems safest to require
@@ -2744,6 +2752,7 @@ public class CameraController2 extends CameraController {
                 }
             }
         }
+        Log.i(TAG, "[AWB] support manual wb:" + camera_features.supports_white_balance_temperature);
         supports_white_balance_temperature = camera_features.supports_white_balance_temperature;
 
         // see note above
@@ -3457,7 +3466,7 @@ public class CameraController2 extends CameraController {
     @Override
     public SupportedValues setWhiteBalance(String value) {
         if( MyDebug.LOG )
-            Log.i(TAG, "setWhiteBalance: " + value);
+            Log.i(TAG, "[AWB] setWhiteBalance: " + value);
         // we convert to/from strings to be compatible with original Android Camera API
         int [] values2 = characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES);
         if( values2 == null ) {
@@ -4727,7 +4736,7 @@ public class CameraController2 extends CameraController {
     @Override
     public void setFocusValue(String focus_value) {
         if( MyDebug.LOG )
-            Log.i(TAG, "setFocusValue: " + focus_value);
+            Log.i(TAG, "[AF_Practise] setFocusValue: " + focus_value);
         int focus_mode;
         switch(focus_value) {
             case "focus_mode_auto":
@@ -4820,7 +4829,7 @@ public class CameraController2 extends CameraController {
     @Override
     public boolean setFocusDistance(float focus_distance) {
         if( MyDebug.LOG )
-            Log.i(TAG, "setFocusDistance: " + focus_distance);
+            Log.i(TAG, "[AF_Practise] setFocusDistance: " + focus_distance);
         if( camera_settings.focus_distance == focus_distance ) {
             if( MyDebug.LOG )
                 Log.i(TAG, "already set");
@@ -4985,6 +4994,7 @@ public class CameraController2 extends CameraController {
 
     @Override
     public void setAutoWhiteBalanceLock(boolean enabled) {
+        Log.i(TAG, "[AWB] setAutoWhiteBalanceLock:" + enabled);
         camera_settings.wb_lock = enabled;
         camera_settings.setAutoWhiteBalanceLock(mPreviewBuilder);
         try {
@@ -6175,13 +6185,13 @@ public class CameraController2 extends CameraController {
         }
         if( supports_face_detect_mode_full ) {
             if( MyDebug.LOG )
-                Log.i(TAG, "use full face detection");
+                Log.i(TAG, "[FD] use full face detection");
             camera_settings.has_face_detect_mode = true;
             camera_settings.face_detect_mode = CaptureRequest.STATISTICS_FACE_DETECT_MODE_FULL;
         }
         else if( supports_face_detect_mode_simple ) {
             if( MyDebug.LOG )
-                Log.i(TAG, "use simple face detection");
+                Log.i(TAG, "[FD] use simple face detection");
             camera_settings.has_face_detect_mode = true;
             camera_settings.face_detect_mode = CaptureRequest.STATISTICS_FACE_DETECT_MODE_SIMPLE;
         }
@@ -6241,7 +6251,7 @@ public class CameraController2 extends CameraController {
     @Override
     public void autoFocus(final AutoFocusCallback cb, boolean capture_follows_autofocus_hint) {
         if( MyDebug.LOG ) {
-            Log.i(TAG, "autoFocus");
+            Log.i(TAG, "[AF_Practise] autoFocus");
             Log.i(TAG, "capture_follows_autofocus_hint? " + capture_follows_autofocus_hint);
         }
         AutoFocusCallback push_autofocus_cb = null;
@@ -8077,6 +8087,7 @@ public class CameraController2 extends CameraController {
         public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
             /*if( MyDebug.LOG )
                 Log.i(TAG, "onCaptureCompleted");*/
+            mPrintResultCounter++;
             if( MyDebug.LOG ) {
                 if( getRequestTagType(request) == RequestTagType.CAPTURE ) {
                     Log.i(TAG, "onCaptureCompleted: capture");
@@ -8122,6 +8133,46 @@ public class CameraController2 extends CameraController {
                             break;
                     }
                     Log.i(TAG, "AE_STATE:" + aeStateStr);
+                }
+            }
+            if (MyDebug.LOG) {
+                if (result.get(CaptureResult.CONTROL_AF_STATE) != null) {
+                    int afState = result.get(CaptureResult.CONTROL_AF_STATE);
+                    String afStateStr = "";
+                    switch (afState) {
+                        case CaptureResult.CONTROL_AF_STATE_INACTIVE:
+                            afStateStr = "INACTIVE";
+                            break;
+                        case CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN:
+                            afStateStr = "PASSIVE_SCAN";
+                            break;
+                        case CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED:
+                            afStateStr = "PASSIVE_FOCUSED";
+                            break;
+                        case CaptureResult.CONTROL_AF_STATE_ACTIVE_SCAN:
+                            afStateStr = "ACTIVE_SCAN";
+                            break;
+                        case CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED:
+                            afStateStr = "FOCUSED_LOCKED";
+                            break;
+                        case CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED:
+                            afStateStr = "NOT_FOCUSED_LOCKED";
+                            break;
+                        case CaptureResult.CONTROL_AF_STATE_PASSIVE_UNFOCUSED:
+                            afStateStr = "PASSIVE_UNFOCUSED";
+                            break;
+                        default:
+                            break;
+                    }
+                    if (mPrintResultCounter % 30 == 0 ||
+                        result.get(CaptureResult.LENS_STATE) == CaptureResult.LENS_STATE_MOVING) {
+                        Log.i(TAG, "[AF_Practise] AF_STATE:" + afStateStr +
+                                ", af mode:" + result.get(CaptureResult.CONTROL_AF_MODE) +
+                                ", af scene changed:" + result.get(CaptureResult.CONTROL_AF_SCENE_CHANGE) +
+                                ", lens state:" + result.get(CaptureResult.LENS_STATE) +
+                                ", focus distance:" + result.get(CaptureResult.LENS_FOCUS_DISTANCE) +
+                                ", focus range:" + result.get(CaptureResult.LENS_FOCUS_RANGE));
+                    }
                 }
             }
             if(getRequestTagType(request) == RequestTagType.CAPTURE ) {
@@ -8393,6 +8444,7 @@ public class CameraController2 extends CameraController {
                             }
                         }
                         if( autofocus_cb != null ) {
+                            Log.d(TAG, "[AF_Practise] auto focus done, focused:" + focus_success);
                             autofocus_cb.onAutoFocus(focus_success);
                             autofocus_cb = null;
                         }
@@ -8732,6 +8784,7 @@ public class CameraController2 extends CameraController {
                             last_faces_detected = camera_faces.length;
                             CameraController.Face [] faces = new CameraController.Face[camera_faces.length];
                             for(int i=0;i<camera_faces.length;i++) {
+                                Log.i(TAG, "[FD] face:" + camera_faces[i].toString());
                                 faces[i] = convertFromCameraFace(sensor_rect, camera_faces[i]);
                             }
                             face_detection_listener.onFaceDetection(faces);
