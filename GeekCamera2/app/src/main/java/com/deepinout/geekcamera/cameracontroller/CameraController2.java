@@ -1,5 +1,6 @@
 package com.deepinout.geekcamera.cameracontroller;
 
+import com.deepinout.geekcamera.GeekCamera2Trace;
 import com.deepinout.geekcamera.MyDebug;
 import com.deepinout.geekcamera.MyUtils;
 import com.deepinout.geekcamera.cts.CameraTestUtils;
@@ -60,6 +61,8 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
+
+import android.os.Trace;
 import android.util.Log;
 import android.util.Pair;
 import android.util.Range;
@@ -1871,13 +1874,16 @@ public class CameraController2 extends CameraController {
         thread.start(); 
         mCameraBackgroundHandler = new Handler(thread.getLooper());
 
+        GeekCamera2Trace.beginSection(GeekCamera2Trace.GET_CAMERA_MANAGER);
         final CameraManager manager = (CameraManager)context.getSystemService(Context.CAMERA_SERVICE);
+        GeekCamera2Trace.endSection();
 
         class MyStateCallback extends CameraDevice.StateCallback {
             boolean callback_done; // must sychronize on this and notifyAll when setting to true
             boolean first_callback = true; // Google Camera says we may get multiple callbacks, but only the first indicates the status of the camera opening operation
             @Override
             public void onOpened(@NonNull CameraDevice cam) {
+                GeekCamera2Trace.endAsyncSection(GeekCamera2Trace.OPEN_CAMERA, 0);
                 if( MyDebug.LOG )
                     Log.i(TAG, "camera opened, first_callback? " + first_callback);
                 /*if( true ) // uncomment to test timeout code
@@ -2061,7 +2067,10 @@ public class CameraController2 extends CameraController {
             }
             if(MyDebug.LOG)
                 Log.i(TAG, "about to open camera: " + cameraIdS, new Throwable());
+            GeekCamera2Trace.beginAsyncSection(GeekCamera2Trace.OPEN_CAMERA, 0);
+            GeekCamera2Trace.beginSection(GeekCamera2Trace.OPEN_CAMERA);
             manager.openCamera(cameraIdS, myStateCallback, mCameraBackgroundHandler);
+            GeekCamera2Trace.endSection();
             if(MyDebug.LOG)
                 Log.i(TAG, "open camera request complete");
         } catch(CameraAccessException e) {
@@ -5362,7 +5371,9 @@ public class CameraController2 extends CameraController {
                     captureSessionHighSpeed.setRepeatingBurst(mPreviewBuilderBurst, previewCaptureCallback, mCameraBackgroundHandler);
                 }
                 else {
+                    GeekCamera2Trace.beginSection(GeekCamera2Trace.SET_REPEATING_REQUEST);
                     int sequenceId = mCameraCaptureSession.setRepeatingRequest(request, previewCaptureCallback, mCameraBackgroundHandler);
+                    GeekCamera2Trace.endSection();
                     Log.i(TAG, "[create_sequence] setRepeatingRequest setRepeatingRequest sequenceId:" + sequenceId);
                 }
                 if( MyDebug.LOG )
@@ -5708,6 +5719,7 @@ public class CameraController2 extends CameraController {
                             mPreviewBuilder.addTarget(mInputImageReader.getSurface());
                             Log.i(TAG, "mPreviewBuilder mInputImageReader addTarget:" + mInputImageReader.getSurface());
                         }
+                        GeekCamera2Trace.isFirstPreviewBuffer = true;
                         try {
                             setRepeatingRequest();
                             if (!want_video_high_speed) {
@@ -5983,7 +5995,9 @@ public class CameraController2 extends CameraController {
                     mSessionConfiguration.setInputConfiguration(inputConfiguration);
                 }
                 mSessionConfiguration.setSessionParameters(mPreviewBuilder.build());
+                GeekCamera2Trace.beginSection(GeekCamera2Trace.CREATE_CAPTURE_SESSION);
                 mCameraDevice.createCaptureSession(mSessionConfiguration);
+                GeekCamera2Trace.endSection();
                 Log.i(TAG, "[Slow_Motion] createCaptureSession, size:" + outputConfigurations.size());
             } else {
                 if (is_video_high_speed) {
@@ -8097,6 +8111,7 @@ public class CameraController2 extends CameraController {
                     Log.i(TAG, "[Capture_Result] frame duration: " + result.get(CaptureResult.SENSOR_FRAME_DURATION));
                 }
             }
+            GeekCamera2Trace.setCounter(GeekCamera2Trace.FRAME_NUMBER, result.getFrameNumber());
             if (MyDebug.LOG) {
                 if (result.get(CaptureResult.FLASH_MODE) != null &&
                     result.get(CaptureResult.FLASH_STATE) != null &&

@@ -1,5 +1,6 @@
 package com.deepinout.geekcamera.preview;
 
+import com.deepinout.geekcamera.GeekCamera2Trace;
 import com.deepinout.geekcamera.cameracontroller.RawImage;
 //import com.deepinout.geekcamera.MainActivity;
 import com.deepinout.geekcamera.MyDebug;
@@ -925,6 +926,11 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 
     @Override
     public void onSurfaceTextureUpdated(SurfaceTexture arg0) {
+        if (GeekCamera2Trace.isFirstPreviewBuffer) {
+            GeekCamera2Trace.isFirstPreviewBuffer = false;
+            GeekCamera2Trace.beginSection(GeekCamera2Trace.FIRST_PREVIEW_BUFFER);
+            GeekCamera2Trace.endSection();
+        }
         refreshPreviewBitmap();
     }
 
@@ -1546,12 +1552,15 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 protected CameraController doInBackground(Void... voids) {
                     if( MyDebug.LOG )
                         Log.d(TAG, "doInBackground, async task: " + this);
-                    return openCameraCore(cameraId_f);
+                    CameraController tmpCameraController = openCameraCore(cameraId_f);
+                    GeekCamera2Trace.beginAsyncSection(GeekCamera2Trace.OPEN_CAMERA_AYSNC_TASK, 0);
+                    return tmpCameraController;
                 }
 
                 /** The system calls this to perform work in the UI thread and delivers
                  * the result from doInBackground() */
                 protected void onPostExecute(CameraController camera_controller) {
+                    GeekCamera2Trace.endAsyncSection(GeekCamera2Trace.OPEN_CAMERA_AYSNC_TASK, 0);
                     if( MyDebug.LOG ) {
                         Log.d(TAG, "onPostExecute, async task: " + this);
                     }
@@ -1602,6 +1611,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
     /** Open the camera - this should be called from background thread, to avoid hogging the UI thread.
      */
     private CameraController openCameraCore(int cameraId) {
+        GeekCamera2Trace.beginSection(GeekCamera2Trace.OPEN_CAMERA_CORE);
         long debug_time = 0;
         if( MyDebug.LOG ) {
             Log.d(TAG, "openCameraCore()");
@@ -1662,6 +1672,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( MyDebug.LOG ) {
             Log.d(TAG, "openCamera: total time for openCameraCore: " + (System.currentTimeMillis() - debug_time));
         }
+        GeekCamera2Trace.endSection();
         return camera_controller_local;
     }
 
@@ -1799,6 +1810,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
      * mode, but this may have different parameters).
      */
     public void setupCamera(boolean take_photo) {
+        GeekCamera2Trace.beginSection(GeekCamera2Trace.SETUP_CAMERA);
         if( MyDebug.LOG )
             Log.d(TAG, "setupCamera()", new Throwable());
         long debug_time = 0;
@@ -2025,6 +2037,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( MyDebug.LOG ) {
             Log.d(TAG, "setupCamera: total time after setupCamera: " + (System.currentTimeMillis() - debug_time));
         }
+        GeekCamera2Trace.endSection();
     }
 
     public void setupBurstMode() {
