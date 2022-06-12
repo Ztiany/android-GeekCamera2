@@ -2200,6 +2200,7 @@ public class CameraController2 extends CameraController {
 
     @Override
     public void release() {
+        GeekCamera2Trace.beginSection(GeekCamera2Trace.CC2_RELEASE);
         if(MyDebug.LOG)
             Log.i(TAG, "release, id:" + getCameraId(), new Throwable());
         synchronized( background_camera_lock ) {
@@ -2212,7 +2213,9 @@ public class CameraController2 extends CameraController {
         mPreviewBuilder = null;
         previewIsVideoMode = false;
         if( mCameraDevice != null ) {
+            GeekCamera2Trace.beginSection(GeekCamera2Trace.CAMERA_DEVICE_RELEASE);
             mCameraDevice.close();
+            GeekCamera2Trace.endSection();
             mCameraDevice = null;
         }
         closePictureImageReader();
@@ -2234,6 +2237,7 @@ public class CameraController2 extends CameraController {
                 e.printStackTrace();
             }
         }
+        GeekCamera2Trace.endSection();
     }
 
     /** Enforce a minimum number of points in tonemap curves - needed due to Galaxy S10e having wrong behaviour if fewer
@@ -2315,6 +2319,7 @@ public class CameraController2 extends CameraController {
     }
 
     private void releaseInputImageReader() {
+        GeekCamera2Trace.beginSection("releaseInputImageReader");
         if (mInputImageReaderListener != null) {
             mInputImageReaderListener.drain();
             mInputImageReaderListener = null;
@@ -2332,9 +2337,11 @@ public class CameraController2 extends CameraController {
             mZslResultListener.drain();
             mZslResultListener = null;
         }
+        GeekCamera2Trace.endSection();
     }
 
     private void closePictureImageReader() {
+        GeekCamera2Trace.beginSection("closePictureImageReader");
         if( MyDebug.LOG )
             Log.i(TAG, "closePictureImageReader()");
         if( imageReader != null ) {
@@ -2346,6 +2353,7 @@ public class CameraController2 extends CameraController {
             imageReaderRaw = null;
             onRawImageAvailableListener = null;
         }
+        GeekCamera2Trace.endSection();
     }
 
     private List<String> convertFocusModesToValues(int [] supported_focus_modes_arr, float minimum_focus_distance) {

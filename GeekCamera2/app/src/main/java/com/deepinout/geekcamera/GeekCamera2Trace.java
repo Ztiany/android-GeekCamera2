@@ -13,6 +13,9 @@ public class GeekCamera2Trace {
     public static final String SET_REPEATING_REQUEST = "GC2_App_setRepeatingRequest";
     public static final String FIRST_PREVIEW_BUFFER = "GC2_App_firstPreviewBuffer";
     public static final String FRAME_NUMBER = "GC2_App_FrameNumber";
+    //Add for close camera
+    public static final String CC2_RELEASE = "GC2_CC2_Release";
+    public static final String CAMERA_DEVICE_RELEASE = "GC2_CameraDevice_Release";
     public static boolean isFirstPreviewBuffer = false;
     public static void beginAsyncSection(String methodName, int cookie) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
