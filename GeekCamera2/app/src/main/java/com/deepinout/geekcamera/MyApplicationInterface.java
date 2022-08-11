@@ -3067,6 +3067,7 @@ public class MyApplicationInterface extends BasicApplicationInterface {
      * @return Whether saving was successful.
      */
     private boolean saveImage(boolean save_expo, List<byte []> images, Date current_date) {
+        GeekCamera2Trace.endAsyncSection(GeekCamera2Trace.GC2_CAPTURE_IMG_AVAILABLE_2_SAVE_IMG, 0);
         if( MyDebug.LOG )
             Log.d(TAG, "saveImage");
 

@@ -1357,6 +1357,8 @@ public class CameraController2 extends CameraController {
     private class OnImageAvailableListener implements ImageReader.OnImageAvailableListener {
         @Override
         public void onImageAvailable(ImageReader reader) {
+            GeekCamera2Trace.endAsyncSection(GeekCamera2Trace.GC2_CAPTURE_SEND_REQUEST_2_IMAGE_AVAILABLE, 0);
+            GeekCamera2Trace.beginAsyncSection(GeekCamera2Trace.GC2_CAPTURE_IMG_AVAILABLE_2_SAVE_IMG, 0);
             if( MyDebug.LOG )
                 Log.i(TAG, "new still image available");
             if( picture_cb == null ) {
@@ -6719,6 +6721,9 @@ public class CameraController2 extends CameraController {
                         Log.i(TAG, "capture with stillBuilder");
                     //pending_request_when_ready = stillBuilder.build();
                     int sequenceId = mCameraCaptureSession.capture(stillBuilder.build(), previewCaptureCallback, mCameraBackgroundHandler);
+                    GeekCamera2Trace.endAsyncSection(GeekCamera2Trace.GC2_CAPTURE_CLICK_2_SEND_REQUEST, 0);
+                    GeekCamera2Trace.beginAsyncSection(GeekCamera2Trace.GC2_CAPTURE_SEND_REQUEST_2_IMAGE_AVAILABLE, 0);
+
                     Log.i(TAG, "[create_sequence] takePictureAfterPrecapture capture sequenceId:" + sequenceId);
                     //captureSession.capture(stillBuilder.build(), new CameraCaptureSession.CaptureCallback() {
                     //}, handler);

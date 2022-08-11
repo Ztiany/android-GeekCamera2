@@ -2349,6 +2349,7 @@ public class ImageSaver extends Thread {
         File picFile = null;
         Uri saveUri = null;
         boolean use_media_store = false;
+        GeekCamera2Trace.beginSection(GeekCamera2Trace.GC2_CAPTURE_INSERT_DB);
         ContentValues contentValues = null; // used if using scoped storage
         try {
             if( !raw_only ) {
@@ -2446,6 +2447,7 @@ public class ImageSaver extends Thread {
                 }
 
                 saveUri = main_activity.getContentResolver().insert(folder, contentValues);
+                GeekCamera2Trace.endSection();
                 if( MyDebug.LOG )
                     Log.d(TAG, "saveUri: " + saveUri);
                 if( saveUri == null ) {
@@ -2462,6 +2464,7 @@ public class ImageSaver extends Thread {
                 Log.d(TAG, "saveUri: " + saveUri);
 
             if( picFile != null || saveUri != null ) {
+                GeekCamera2Trace.beginSection(GeekCamera2Trace.GC2_CAPTURE_SAVE_JPEG);
                 OutputStream outputStream;
                 if( picFile != null )
                     outputStream = new FileOutputStream(picFile);
@@ -2492,6 +2495,7 @@ public class ImageSaver extends Thread {
                 finally {
                     outputStream.close();
                 }
+                GeekCamera2Trace.endSection();
                 if( MyDebug.LOG )
                     Log.d(TAG, "saveImageNow saved photo");
                 if( MyDebug.LOG ) {
@@ -2566,7 +2570,9 @@ public class ImageSaver extends Thread {
                         if( Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ) {
                             contentValues.clear();
                             contentValues.put(MediaStore.Images.Media.IS_PENDING, 0);
+                            GeekCamera2Trace.beginSection(GeekCamera2Trace.GC2_CAPTURE_UPDATE_DB);
                             main_activity.getContentResolver().update(saveUri, contentValues, null, null);
+                            GeekCamera2Trace.endSection();
                         }
 
                         // no need to broadcast when using mediastore method
@@ -2652,7 +2658,9 @@ public class ImageSaver extends Thread {
                     options.inPurgeable = true;
                 }
                 options.inSampleSize = sample_size;
+                GeekCamera2Trace.beginSection(GeekCamera2Trace.GC2_CAPTURE_DECODE_BITMAP_THUMBNAIL);
                 thumbnail = BitmapFactory.decodeByteArray(data, 0, data.length, options);
+                GeekCamera2Trace.endSection();
                 if( MyDebug.LOG ) {
                     Log.d(TAG, "thumbnail width: " + thumbnail.getWidth());
                     Log.d(TAG, "thumbnail height: " + thumbnail.getHeight());

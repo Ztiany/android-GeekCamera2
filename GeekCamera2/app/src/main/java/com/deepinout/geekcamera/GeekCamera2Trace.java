@@ -16,6 +16,22 @@ public class GeekCamera2Trace {
     //Add for close camera
     public static final String CC2_RELEASE = "GC2_CC2_Release";
     public static final String CAMERA_DEVICE_RELEASE = "GC2_CameraDevice_Release";
+    //Add for switch between photo and video
+    public static final String GC2_START_RECORDING = "GC2_CC2_StartRecording";
+    public static final String GC2_STOP_RECORDING = "GC2_CC2_StopRecording";
+    public static final String MEDIA_RECORDER_PREPARE = "GC2_CC2_MediaRecorder_Prepare";
+    public static final String MEDIA_RECORDER_START = "GC2_CC2_MediaRecorder_Start";
+    public static final String MEDIA_RECORDER_RELEASE = "GC2_CC2_MediaRecorder_Release";
+    public static final String MEDIA_RECORDER_STOP = "GC2_CC2_MediaRecorder_Stop";
+    //Add for capture
+    public static final String GC2_CAPTURE_CLICK_2_SEND_REQUEST = "GC2_CAPTURE_CLICK_2_SEND_REQUEST";
+    public static final String GC2_CAPTURE_SEND_REQUEST_2_IMAGE_AVAILABLE = "GC2_CAPTURE_SEND_REQUEST_2_IMAGE_AVAILABLE";
+    public static final String GC2_CAPTURE_IMG_AVAILABLE_2_SAVE_IMG = "GC2_CAPTURE_IMG_AVAILABLE_2_SAVE_IMG";
+    public static final String GC2_CAPTURE_INSERT_DB = "GC2_CAPTURE_INSERT_DB";
+    public static final String GC2_CAPTURE_SAVE_JPEG = "GC2_CAPTURE_SAVE_JPEG";
+    public static final String GC2_CAPTURE_UPDATE_DB = "GC2_CAPTURE_UPDATE_DB";
+    public static final String GC2_CAPTURE_DECODE_BITMAP_THUMBNAIL = "GC2_CAPTURE_DECODE_BITMAP_THUMBNAIL";
+
     public static boolean isFirstPreviewBuffer = false;
     public static void beginAsyncSection(String methodName, int cookie) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {

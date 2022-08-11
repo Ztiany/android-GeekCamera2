@@ -997,7 +997,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                     Log.d(TAG, "about to call video_recorder.stop()");
                 if( test_runtime_on_video_stop )
                     throw new RuntimeException();
+                GeekCamera2Trace.beginSection(GeekCamera2Trace.MEDIA_RECORDER_STOP);
                 mMediaRecorder.stop();
+                GeekCamera2Trace.endSection();
                 if( MyDebug.LOG )
                     Log.d(TAG, "done video_recorder.stop()");
             }
@@ -1028,7 +1030,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         mMediaRecorder.reset();
         if( MyDebug.LOG )
             Log.d(TAG, "release video_recorder");
+        GeekCamera2Trace.beginSection(GeekCamera2Trace.MEDIA_RECORDER_RELEASE);
         mMediaRecorder.release();
+        GeekCamera2Trace.endSection();
         mMediaRecorder = null;
         video_recorder_is_paused = false;
         applicationInterface.cameraInOperation(false, true);
@@ -4946,6 +4950,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
      * @param continuous_fast_burst If true, then start a continuous fast burst.
      */
     public void takePicturePressed(boolean photo_snapshot, boolean continuous_fast_burst) {
+        GeekCamera2Trace.beginAsyncSection(GeekCamera2Trace.GC2_CAPTURE_CLICK_2_SEND_REQUEST, 0);
         if( MyDebug.LOG )
             Log.d(TAG, "takePicturePressed");
         if( mCameraController == null ) {
@@ -5406,6 +5411,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
      */
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private void startVideoRecording(final boolean max_filesize_restart) {
+        GeekCamera2Trace.beginSection(GeekCamera2Trace.GC2_START_RECORDING);
         if( MyDebug.LOG )
             Log.d(TAG, "startVideoRecording");
         focus_success = FOCUS_DONE; // clear focus rectangle (don't do for taking photos yet)
@@ -5545,7 +5551,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 if( MyDebug.LOG )
                     Log.d(TAG, "about to prepare video recorder");
 
+                GeekCamera2Trace.beginSection(GeekCamera2Trace.MEDIA_RECORDER_PREPARE);
                 local_video_recorder.prepare();
+                GeekCamera2Trace.endSection();
                 if( test_video_ioexception ) {
                     if( MyDebug.LOG )
                         Log.d(TAG, "test_video_ioexception is true");
@@ -5565,7 +5573,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                     Log.d(TAG, "about to start video recorder");
 
                 try {
+                    GeekCamera2Trace.beginSection(GeekCamera2Trace.MEDIA_RECORDER_START);
                     local_video_recorder.start();
+                    GeekCamera2Trace.endSection();
                     if( test_video_failure ) {
                         if( MyDebug.LOG )
                             Log.d(TAG, "test_video_failure is true");
@@ -5670,6 +5680,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 this.showToast(null, R.string.video_no_free_space);
             }
         }
+        GeekCamera2Trace.endSection();
     }
 
     private void videoRecordingStarted(boolean max_filesize_restart) {
