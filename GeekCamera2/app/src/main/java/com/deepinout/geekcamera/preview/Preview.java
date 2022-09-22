@@ -61,6 +61,7 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorManager;
 import android.location.Location;
 import android.media.CamcorderProfile;
+import android.media.MediaCodec;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -442,7 +443,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( using_android_l ) {
             // use a TextureView for Android L - had bugs with SurfaceView not resizing properly on Nexus 7; and good to use a TextureView anyway
             // ideally we'd use a TextureView for older camera API too, but sticking with SurfaceView to avoid risk of breaking behaviour
-            using_texture_view = true;
+            using_texture_view = false;
         }
 
         if( using_texture_view ) {
@@ -5420,6 +5421,8 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         nextVideoFileInfo = null;
         final VideoProfile profile = getVideoProfile();
         VideoFileInfo info = createVideoFile(profile.fileExtension);
+        Surface persistSurface =
+                mCameraController.usePersistSurface() ? MediaCodec.createPersistentInputSurface() : null;
         if( info == null ) {
             videoFileInfo = new VideoFileInfo();
             applicationInterface.onFailedCreateVideoFileError();
@@ -5490,7 +5493,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             if( MyDebug.LOG )
                 Log.d(TAG, "copy video profile to media recorder");
 
-            profile.copyToMediaRecorder(local_video_recorder, false);
+            profile.copyToMediaRecorder(local_video_recorder, false, persistSurface);
 
             boolean told_app_starting = false; // true if we called applicationInterface.startingVideo()
             try {
@@ -5562,7 +5565,7 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 
                 boolean want_photo_video_recording = supportsPhotoVideoRecording() && applicationInterface.usePhotoVideoRecording();
 
-                mCameraController.initVideoRecorderPostPrepare(local_video_recorder, want_photo_video_recording);
+                mCameraController.initVideoRecorderPostPrepare(local_video_recorder, want_photo_video_recording, persistSurface);
                 if( test_video_cameracontrollerexception ) {
                     if( MyDebug.LOG )
                         Log.d(TAG, "test_video_cameracontrollerexception is true");

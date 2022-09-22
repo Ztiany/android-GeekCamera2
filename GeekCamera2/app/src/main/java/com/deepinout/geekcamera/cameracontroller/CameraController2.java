@@ -237,6 +237,7 @@ public class CameraController2 extends CameraController {
     private HandlerThread thread;
     private Handler mCameraBackgroundHandler;
     private Surface video_recorder_surface;
+    private Surface mVideoPersistSurface;
 
     private int mPreviewWidth;
     private int mPreviewHeight;
@@ -5660,8 +5661,13 @@ public class CameraController2 extends CameraController {
 
             synchronized( background_camera_lock ) {
                 if( video_recorder != null )
-                    video_recorder_surface = video_recorder.getSurface();
-                else
+                {
+                    video_recorder_surface = mVideoPersistSurface;
+                    if (video_recorder_surface == null)
+                    {
+                        video_recorder_surface = video_recorder.getSurface();
+                    }
+                } else
                     video_recorder_surface = null;
                 if( MyDebug.LOG )
                     Log.i(TAG, "video_recorder_surface: " + video_recorder_surface);
@@ -7866,7 +7872,12 @@ public class CameraController2 extends CameraController {
     }
 
     @Override
-    public void initVideoRecorderPostPrepare(MediaRecorder video_recorder, boolean want_photo_video_recording) throws CameraControllerException {
+    public boolean usePersistSurface() {
+        return true;
+    }
+
+    @Override
+    public void initVideoRecorderPostPrepare(MediaRecorder video_recorder, boolean want_photo_video_recording, Surface persistSurface) throws CameraControllerException {
         if( MyDebug.LOG )
             Log.i(TAG, "initVideoRecorderPostPrepare");
         if( mCameraDevice == null ) {
@@ -7880,6 +7891,7 @@ public class CameraController2 extends CameraController {
             if( MyDebug.LOG )
                 Log.i(TAG, "done");
             previewIsVideoMode = true;
+            mVideoPersistSurface = persistSurface;
             mPreviewBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_VIDEO_RECORD);
             camera_settings.setupBuilder(mPreviewBuilder, false);
             createCaptureSession(video_recorder, want_photo_video_recording);
@@ -7903,6 +7915,10 @@ public class CameraController2 extends CameraController {
         playSound(MediaActionSound.STOP_VIDEO_RECORDING);
         createPreviewRequest();
         createCaptureSession(null, false);
+        if (mVideoPersistSurface != null) {
+            mVideoPersistSurface.release();
+            mVideoPersistSurface = null;
+        }
         /*if( MyDebug.LOG )
             Log.i(TAG, "add preview surface to previewBuilder");
         Surface surface = getPreviewSurface();

@@ -15,6 +15,7 @@ import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Handler;
 import android.util.Log;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.TextureView;
 
@@ -1903,7 +1904,7 @@ public class CameraController1 extends CameraController {
     }
 
     @Override
-    public void initVideoRecorderPostPrepare(MediaRecorder video_recorder, boolean want_photo_video_recording) {
+    public void initVideoRecorderPostPrepare(MediaRecorder video_recorder, boolean want_photo_video_recording, Surface persistSurface) {
         // no further actions necessary
     }
 

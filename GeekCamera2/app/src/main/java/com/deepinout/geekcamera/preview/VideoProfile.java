@@ -4,6 +4,7 @@ import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.util.Log;
 import android.util.Size;
+import android.view.Surface;
 
 import androidx.annotation.NonNull;
 
@@ -104,7 +105,7 @@ public class VideoProfile {
     /**
      * Copies the fields of this profile to a MediaRecorder instance.
      */
-    public void copyToMediaRecorder(MediaRecorder media_recorder, boolean slow_motion) {
+    public void copyToMediaRecorder(MediaRecorder media_recorder, boolean slow_motion, Surface persistSurface) {
         if( MyDebug.LOG )
             Log.d(TAG, "copyToMediaRecorder: " + media_recorder + toString());
         if( record_audio && !slow_motion) {
@@ -133,5 +134,9 @@ public class VideoProfile {
         }
         if( MyDebug.LOG )
             Log.d(TAG, "done: " + media_recorder);
+
+        if (persistSurface != null) {
+            media_recorder.setInputSurface(persistSurface);
+        }
     }
 }
